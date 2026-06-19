@@ -89,6 +89,7 @@ const AdminPanel = () => {
   ]);
 
   const [selectedCreator, setSelectedCreator] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   // --- ACTIONS: USERS ---
   const toggleUserStatus = (userId) => {
