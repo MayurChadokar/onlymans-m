@@ -21,6 +21,19 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
+const updateAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+    const avatarUrl = req.file.path; // Cloudinary assigns the URL to req.file.path
+    const user = await userService.updateAvatar(req.user.id, avatarUrl);
+    res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMySubscriptions = async (req, res, next) => {
   try {
     const subscriptions = await userService.getUserSubscriptions(req.user.id);
@@ -105,5 +118,6 @@ module.exports = {
   getPaymentMethods,
   addPaymentMethod,
   removePaymentMethod,
-  getFavorites
+  getFavorites,
+  updateAvatar
 };

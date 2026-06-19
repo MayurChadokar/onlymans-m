@@ -6,11 +6,14 @@ const authenticate = require('../../auth/middleware/auth.middleware');
 
 const router = express.Router();
 
+const { upload } = require('../../media/services/cloudinary.service');
+
 router.use(authenticate);
 
 router.get('/dashboard', userController.getDashboard);
 router.get('/profile', userController.getProfile);
 router.patch('/profile', validate(userValidator.updateProfile), userController.updateProfile);
+router.put('/avatar', upload.single('avatar'), userController.updateAvatar);
 router.delete('/profile', userController.deactivateAccount);
 router.get('/subscriptions', userController.getMySubscriptions);
 router.post('/subscriptions/:subscriptionId/cancel', userController.cancelSubscription);

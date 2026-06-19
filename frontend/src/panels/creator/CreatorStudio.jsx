@@ -733,6 +733,23 @@ const CreatorStudio = () => {
     </div>
   );
 
+  const renderMediaThumbnail = (post, isSmall = false) => {
+    const isVideo = post.type?.toUpperCase() === 'VIDEO' || post.mediaUrl?.match(/\.(mp4|mov|webm)$/i) || post.mediaUrl?.includes('video/upload');
+    // For Cloudinary videos, replacing the extension with .jpg automatically fetches the thumbnail.
+    const thumbUrl = isVideo && post.mediaUrl ? post.mediaUrl.replace(/\.(mp4|mov|webm)$/i, '.jpg') : post.mediaUrl;
+    
+    return (
+      <>
+        <img src={thumbUrl} alt="Post Thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {isVideo && (
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: isSmall ? '28px' : '48px', height: isSmall ? '28px' : '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.8)' }}>
+            <svg viewBox="0 0 24 24" width={isSmall ? "14" : "24"} height={isSmall ? "14" : "24"} fill="white" style={{ marginLeft: '2px' }}><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderPosts = () => (
     <div>
       <div className="upload-header">
@@ -743,8 +760,8 @@ const CreatorStudio = () => {
         {posts.map((post) => (
           <div key={post.id} className="manage-post-card" style={{ background: 'var(--bg-card)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
             <div style={{ position: 'relative', height: '160px' }}>
-              <img src={post.mediaUrl} alt="Post" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--bg-dark, rgba(0,0,0,0.6))', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>{post.visibility === 'PREMIUM' ? 'Premium' : 'Free'}</span>
+              {renderMediaThumbnail(post)}
+              <span style={{ position: 'absolute', top: '8px', left: '8px', background: 'var(--bg-dark, rgba(0,0,0,0.6))', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', zIndex: 2 }}>{post.visibility === 'PREMIUM' ? 'Premium' : 'Free'}</span>
             </div>
             <div style={{ padding: '16px' }}>
               <h5 style={{ margin: '0 0 4px 0', color: 'var(--text-color)', fontSize: '0.95rem' }}>{post.content}</h5>
@@ -821,7 +838,9 @@ const CreatorStudio = () => {
         <h3 style={{ marginBottom: '16px', color: 'var(--text-color)' }}>Top Performing Posts</h3>
         {posts.slice(0, 5).map((post) => (
           <div key={post.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 0', borderBottom: '1px solid var(--border-color)' }}>
-            <img src={post.mediaUrl} alt="Post" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
+            <div style={{ position: 'relative', width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+              {renderMediaThumbnail(post, true)}
+            </div>
             <div style={{ flex: 1 }}>
               <p style={{ color: 'var(--text-color)', fontSize: '0.9rem', marginBottom: '4px' }}>{post.content}</p>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{post.date}</span>

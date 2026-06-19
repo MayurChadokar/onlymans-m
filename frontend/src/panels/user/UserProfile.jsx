@@ -4,6 +4,7 @@ import './Dashboard.css';
 import Logo from '../../components/Logo';
 import { apiRequest } from '../../utils/api';
 import { getAccessToken, getCurrentUser } from '../../utils/auth';
+import { toast } from 'react-hot-toast';
 
 const UserProfile = () => {
   const navigate = useNavigate();
@@ -25,6 +26,42 @@ const UserProfile = () => {
   const [creatorLoading, setCreatorLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const res = await apiRequest('/users/avatar', {
+        method: 'PUT',
+        token: getAccessToken(),
+        body: formData,
+        isFormData: true
+      });
+
+      if (res.user) {
+        setUser(res.user);
+        // Also update local storage so it persists on reload
+        const sessionStr = localStorage.getItem('onlymans_auth_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          session.user = { ...session.user, avatar: res.user.avatarUrl };
+          localStorage.setItem('onlymans_auth_session', JSON.stringify(session));
+        }
+        toast.success('Avatar updated successfully! 🚀');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Avatar upload failed');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -67,7 +104,7 @@ const UserProfile = () => {
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    setSaveMsg('');
+    const loadingToast = toast.loading('Saving profile...');
     try {
       if (isCreator) {
         await apiRequest('/creators/profile', {
@@ -78,11 +115,11 @@ const UserProfile = () => {
             price: Number(editData.price),
           },
         });
-        setSaveMsg('Creator profile saved!');
+        toast.success('Creator profile saved successfully! 🎉', { id: loadingToast });
       }
       setIsEditing(false);
     } catch (err) {
-      setSaveMsg(err.message || 'Save failed. Try again.');
+      toast.error(err.message || 'Save failed. Try again.', { id: loadingToast });
     } finally {
       setIsSaving(false);
     }
@@ -357,7 +394,21 @@ const UserProfile = () => {
                     <h2 style={{ fontSize: '1.25rem', marginBottom: '4px', color: 'var(--text-color)' }}>{user?.displayName || user?.username}</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>@{user?.username}</p>
                     <div style={{ display: 'flex', gap: '12px' }}>
-                      <button className="btn-secondary-dark" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>Change Avatar</button>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        style={{ display: 'none' }} 
+                        accept="image/*" 
+                        onChange={handleAvatarUpload} 
+                      />
+                      <button 
+                        className="btn-secondary-dark" 
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingAvatar}
+                      >
+                        {uploadingAvatar ? 'Uploading...' : 'Change Avatar'}
+                      </button>
                       <button className="btn-secondary-dark" style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#ff4a4a' }}>Remove</button>
                     </div>
                   </div>

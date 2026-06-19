@@ -49,6 +49,16 @@ export const setAuthSession = (payload) => {
   return session;
 };
 
+export const updateUserInSession = (updates) => {
+  const session = getAuthSession();
+  if (session && session.user) {
+    session.user = { ...session.user, ...updates };
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+    return session.user;
+  }
+  return null;
+};
+
 export const updateAuthUser = (user) => {
   const session = getAuthSession();
   if (!session) {

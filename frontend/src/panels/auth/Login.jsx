@@ -43,7 +43,7 @@ const Login = () => {
     <div className="login-container">
       <div className="login-right">
         <div className="login-form-wrapper">
-          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '2.5rem' }}>
             <Logo size={40} textClass="brand-logo" />
           </div>
 

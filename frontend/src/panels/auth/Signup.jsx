@@ -45,7 +45,7 @@ const Signup = () => {
     <div className="login-container">
       <div className="login-right">
         <div className="login-form-wrapper">
-          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '2.5rem' }}>
             <Logo size={40} textClass="brand-logo" />
           </div>
 
@@ -120,26 +120,28 @@ const Signup = () => {
 
               <div className="form-group">
                 <label>Account Type</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 12l2 2 4-4"></path>
-                      <path d="M20 6 9 17l-5-5"></path>
-                    </svg>
-                  </span>
-                  <select
-                    className="form-select"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setRole('USER')}
+                    style={{ flex: 1, height: '48px', borderRadius: '8px', border: role === 'USER' ? '2px solid #FFA52C' : '1px solid #E1E2E6', background: role === 'USER' ? 'rgba(255, 165, 44, 0.1)' : '#F4F5F6', color: '#1A1A1E', fontWeight: role === 'USER' ? 'bold' : 'normal', cursor: 'pointer', transition: 'all 0.2s ease' }}
                   >
-                    <option value="USER">User</option>
-                    <option value="CREATOR">Creator</option>
-                  </select>
+                    Viewer
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setRole('CREATOR')}
+                    style={{ flex: 1, height: '48px', borderRadius: '8px', border: role === 'CREATOR' ? '2px solid #00B4D8' : '1px solid #E1E2E6', background: role === 'CREATOR' ? 'rgba(0, 180, 216, 0.1)' : '#F4F5F6', color: '#1A1A1E', fontWeight: role === 'CREATOR' ? 'bold' : 'normal', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                  >
+                    Creator
+                  </button>
                 </div>
-                <div className="form-hint">Pick Creator if you want to start posting premium content immediately.</div>
+                <div className="form-hint" style={{ marginTop: '8px', color: role === 'CREATOR' ? '#00B4D8' : '#62626A' }}>
+                  {role === 'CREATOR' ? 'You will be able to post premium content and earn money immediately.' : 'You will be able to subscribe to creators and view premium content.'}
+                </div>
               </div>
 
-              <button type="submit" className="submit-btn" disabled={loading}>
+              <button type="submit" className="submit-btn" disabled={loading} style={{ marginTop: '24px' }}>
                 {loading ? 'Creating Account...' : 'Sign Up'}
                 {!loading && (
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px' }}>
@@ -151,13 +153,6 @@ const Signup = () => {
 
             <div className="signup-prompt">
               Already have an account? <Link to="/login">Sign In</Link>
-            </div>
-
-            <div className="divider" style={{ marginTop: '2rem' }}>
-              <span>WANT TO EARN?</span>
-            </div>
-            <div className="signup-prompt" style={{ marginTop: '1rem' }}>
-              <Link to="/user/become-creator" style={{ color: 'var(--text-primary)' }}>Become a Creator</Link>
             </div>
           </div>
 

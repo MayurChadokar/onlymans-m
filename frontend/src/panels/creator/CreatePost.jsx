@@ -4,6 +4,7 @@ import './CreatorStudio.css';
 import Logo from '../../components/Logo';
 import { apiRequest } from '../../utils/api';
 import { clearAuthSession, getAccessToken, getCurrentUser, getRefreshToken } from '../../utils/auth';
+import { toast } from 'react-hot-toast';
 
 const CreatePost = () => {
   const location = useLocation();
@@ -67,18 +68,19 @@ const CreatePost = () => {
         if (progress >= 100) {
           clearInterval(interval);
           setIsUploading(false);
+          toast.success('Media processed and ready! 🚀');
         }
-      }, 150); // fast fake upload
+      }, 40); // very fast fake upload
     }
   };
 
   const handlePostSubmit = () => {
     if (!selectedFile) {
-      alert("Please select a media file to upload first!");
+      toast.error("Please select a media file to upload first!");
       return;
     }
     
-      alert(`Post submitted successfully!`);
+      toast.success(`Post submitted successfully! 🎉`);
       
       // Reset form
       setSelectedFile(null);

@@ -25,6 +25,13 @@ const updateUserProfile = async (userId, updateData) => {
   return updated;
 };
 
+const updateAvatar = async (userId, avatarUrl) => {
+  const updated = await userRepository.updateUserById(userId, { avatarUrl });
+  await cache.del(`user:profile:${userId}`);
+  await cache.del(`user:dashboard:${userId}`);
+  return updated;
+};
+
 const getUserSubscriptions = async (userId) => {
   return cache.wrap(`user:subscriptions:${userId}`, USERS_TTL, async () => {
     const subscriptions = await userRepository.findAllUserSubscriptions(userId);
@@ -167,4 +174,5 @@ module.exports = {
   getPaymentMethods,
   addPaymentMethod,
   removePaymentMethod,
+  updateAvatar,
 };

@@ -258,12 +258,7 @@ const CreatorProfile = () => {
                 </div>
 
                 <div className="profile-feed-grid">
-                  {posts.map((post) => {
-                    const thumbUrl = post.type === 'VIDEO' && post.mediaUrl.includes('cloudinary') 
-                      ? post.mediaUrl.replace(/\.[^/.]+$/, ".jpg") 
-                      : post.mediaUrl;
-                    
-                    return (
+                  {posts.map((post) => (
                     <div key={post.id} className={`grid-post ${post.isLocked ? 'locked-post' : 'unlocked-post'}`}>
                       {post.isLocked ? (
                         <div className="locked-content">
@@ -272,24 +267,34 @@ const CreatorProfile = () => {
                           <button onClick={handleSubscribe} className="btn-gradient small-btn">Unlock Access</button>
                         </div>
                       ) : (
-                        <div onClick={() => setSelectedPost(post)} style={{ cursor: 'pointer', height: '100%', width: '100%' }}>
-                          <img src={thumbUrl} alt="Post" style={{ objectFit: 'cover' }} />
-                          {post.type === 'VIDEO' && (
-                            <div className="video-icon">
-                              <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M8 5v14l11-7z" /></svg>
-                            </div>
+                        <div onClick={() => setSelectedPost(post)} style={{ cursor: 'pointer', height: '100%', width: '100%', position: 'relative', overflow: 'hidden', borderRadius: '12px' }} className="post-thumbnail-wrapper">
+                          {post.type === 'VIDEO' ? (
+                            <>
+                              <video src={post.mediaUrl + "#t=0.1"} preload="metadata" style={{ objectFit: 'cover', width: '100%', height: '100%', display: 'block' }} />
+                              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                                <svg viewBox="0 0 24 24" width="32" height="32" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <img src={post.mediaUrl} alt="Post" style={{ objectFit: 'cover', width: '100%', height: '100%', display: 'block' }} />
+                              <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '6px', backdropFilter: 'blur(4px)' }}>
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                              </div>
+                            </>
                           )}
-                          <div className="post-hover-stats">
-                            <span>
+                          
+                          <div className="post-hover-stats" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 12px 12px', background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', fontWeight: 500 }}>
                               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
-                              {post.createdAt}
+                              {post.likesCount || 0}
                             </span>
+                            <span style={{ fontSize: '0.75rem', color: '#E1E2E6' }}>{post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Recent'}</span>
                           </div>
                         </div>
                       )}
                     </div>
-                    );
-                  })}
+                  ))}
 
                   {!posts.length && (
                     <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-secondary)', padding: '40px 0' }}>

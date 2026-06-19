@@ -351,6 +351,10 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+.post-thumbnail-wrapper:hover .post-hover-stats {
+  opacity: 1 !important;
+}
+
 /* Responsiveness */
 @media (max-width: 1024px) {
   .profile-content-container {

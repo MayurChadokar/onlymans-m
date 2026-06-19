@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { apiRequest } from './utils/api';
 import { clearAuthSession, getAccessToken, getCurrentUser, updateAuthUser } from './utils/auth';
+import { Toaster } from 'react-hot-toast';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 import Login        from './panels/auth/Login';
@@ -104,6 +105,17 @@ function App() {
 
   return (
     <div className="app-container">
+      <Toaster 
+        position="top-center" 
+        toastOptions={{ 
+          style: { 
+            background: 'var(--bg-card)', 
+            color: 'var(--text-color)', 
+            border: '1px solid var(--border-color)',
+            borderRadius: '10px'
+          }
+        }} 
+      />
       <Routes>
         <Route path="/" element={<SessionHomeRedirect />} />
         <Route path="/login" element={<Login />} />

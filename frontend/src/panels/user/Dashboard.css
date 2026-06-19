@@ -22,6 +22,7 @@
 
 .nav-left {
   width: 250px;
+  flex-shrink: 0;
 }
 
 .brand-logo-small {
@@ -66,7 +67,8 @@
 }
 
 .nav-right {
-  width: 250px;
+  width: 300px;
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   align-items: center;

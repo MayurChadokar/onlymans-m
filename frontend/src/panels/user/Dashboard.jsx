@@ -270,83 +270,87 @@ const Dashboard = () => {
   };
   return (
     <div className="dashboard-layout">
-      {/* Top Navbar */}
+      {/* Navbar */}
       <nav className="top-nav">
-        <div className="nav-left">
-          <Link to="/user/dashboard" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-          </Link>
-        </div>
-        <div className="nav-center">
-          <div className="search-bar">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input type="text" placeholder="Search creators, hashtags..." />
+        <div className="top-nav-inner" style={{ display: 'flex', width: '100%', maxWidth: '1400px', margin: '0 auto', alignItems: 'center' }}>
+          <div className="nav-left">
+            <Link to="/user/dashboard" className="brand-logo-small">
+              <Logo size={24} textClass="brand-logo-small" />
+            </Link>
           </div>
-        </div>
-        <div className="nav-right">
-          <button className="icon-btn" onClick={toggleTheme} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '50%' }} title="Toggle Theme">
-            {theme === 'dark' ? (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+
+          <div className="nav-center">
+            <div className="search-bar">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-              </svg>
-            )}
-          </button>
-          <button className="icon-btn">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
-          <button className="icon-btn">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-          </button>
-          {user && (
-            <div className="user-avatar" style={{ position: 'relative' }}>
-              <img
-                src={user?.avatar || "https://i.pravatar.cc/150?img=11"}
-                alt="Profile"
-                onClick={() => setShowDropdown(!showDropdown)}
-                style={{ cursor: 'pointer' }}
-              />
-              {showDropdown && (
-                <div
-                  style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}
-                  onClick={() => setShowDropdown(false)}
-                >
-                  <Link
-                    to="/user/profile"
-                    style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}
-                  >
-                    ⚙️ Account Settings
-                  </Link>
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                  <button
-                    onClick={handleLogout}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                  >
-                    🚪 Log Out
-                  </button>
-                </div>
-              )}
+              <input type="text" placeholder="Search creators, posts..." />
             </div>
-          )}
+          </div>
+
+          <div className="nav-right">
+            <button className="icon-btn" onClick={toggleTheme}>
+              {theme === 'dark' ? (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <line x1="12" y1="1" x2="12" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="23"></line>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                  <line x1="1" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="12" x2="23" y2="12"></line>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+              )}
+            </button>
+            <button className="icon-btn">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            </button>
+            <button className="icon-btn">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </button>
+            {user && (
+              <div className="user-avatar" style={{ position: 'relative' }}>
+                <img
+                  src={user?.avatar || "https://i.pravatar.cc/150?img=11"}
+                  alt="Profile"
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {showDropdown && (
+                  <div
+                    style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}
+                    onClick={() => setShowDropdown(false)}
+                  >
+                    <Link
+                      to="/user/profile"
+                      style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}
+                    >
+                      ⚙️ Account Settings
+                    </Link>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+                    <button
+                      onClick={handleLogout}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
+                    >
+                      🚪 Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -443,12 +447,11 @@ const Dashboard = () => {
                     {post.content}
                   </p>
                   {post.mediaUrl && (
-                    <div className="post-image-wrapper">
-                      <img src={post.mediaUrl} alt="Post Media" className="post-main-img" />
-                      {post.type === 'VIDEO' && (
-                        <div className="video-icon-overlay" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg viewBox="0 0 24 24" width="32" height="32" fill="white"><path d="M8 5v14l11-7z" /></svg>
-                        </div>
+                    <div className="post-image-wrapper" style={{ position: 'relative', width: '100%', maxHeight: '500px', overflow: 'hidden', borderRadius: '12px', marginBottom: '16px', backgroundColor: '#000' }}>
+                      {post.type === 'VIDEO' ? (
+                        <video src={post.mediaUrl + "#t=0.1"} preload="metadata" controls className="post-main-img" style={{ width: '100%', height: '100%', maxHeight: '500px', objectFit: 'contain', display: 'block' }} controlsList="nodownload" onContextMenu={(e) => e.preventDefault()} />
+                      ) : (
+                        <img src={post.mediaUrl} alt="Post Media" className="post-main-img" style={{ width: '100%', height: '100%', maxHeight: '500px', objectFit: 'contain', display: 'block' }} />
                       )}
                     </div>
                   )}
