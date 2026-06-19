@@ -1,0 +1,1495 @@
+﻿ 
+CREATOR SUBSCRIPTION PLATFORM 
+Production-Grade Backend Architecture 
+Principal Software Architect Design Document 
+Version 1.0  |  Industrial Grade  |  100K+ Users 
+ 
+NestJS + Prisma 
+PostgreSQL + Redis 
+AWS S3 + CloudFront 
+BullMQ + FFmpeg 
+ 
+ 
+Table of Contents 
+ 
+1.  Executive Summary & Platform Overview 	3 
+2.  High-Level Architecture Diagram 	4 
+3.  Modular Monolith — Module Breakdown 	5 
+4.  Complete Backend Folder Structure 	7 
+5.  Database Schema Design 	9 
+6.  Prisma Model Relationships 	12 
+7.  API Design & Endpoint Reference 	14 
+8.  Authentication & Security Architecture 	16 
+9.  Video Processing & HLS Streaming Pipeline 	18 
+10.  Redis Caching Strategy 	20 
+11.  BullMQ Queue Architecture 	21 
+12.  CloudFront CDN Integration 	22 
+13.  Payment & Creator Payout Workflow 	23 
+14.  Feed Generation Strategy 	24 
+15.  Notification Architecture 	25 
+16.  Database Indexing Strategy 	26 
+17.  Horizontal Scaling & Load Balancing 	27 
+18.  Deployment Architecture (Docker) 	28 
+19.  Monitoring & Logging Strategy 	29 
+20.  Cost Optimization Recommendations 	30 
+21.  Future Microservices Migration Path 	31 
+22.  Tradeoffs & Design Decisions 	33 
+ 
+1. Executive Summary & Platform Overview 
+ 
+This document defines the production-grade backend architecture for a creator subscription platform comparable to OnlyFans, Patreon, and Fansly. The system is designed as a Modular Monolith with clean domain boundaries, enabling future migration to microservices without a rewrite. 
+ 
+Business Capabilities 
+Creator profiles, content uploads (video/image/text), free & subscriber-only posts 
+Monthly subscription payments with automated creator payouts 
+HLS video streaming via CloudFront CDN with signed URLs 
+Social interactions: likes, comments, shares, follows 
+Role-based access: Admin, Creator, Subscriber 
+Real-time notifications, earnings dashboard, admin panel 
+ 
+Non-Functional Targets 
+Metric 
+Target 
+Strategy 
+Concurrent Users 
+100,000+ 
+Horizontal scaling + Redis 
+Video Viewers (concurrent) 
+10,000+ 
+HLS + CloudFront CDN 
+API Response Time (p95) 
+<200ms 
+Redis cache + DB indexes 
+Video Upload Size 
+Up to 10GB 
+S3 multipart upload 
+Uptime SLA 
+99.9% 
+Multi-AZ + health checks 
+Auth Token TTL 
+15 min (access) 
+JWT + refresh rotation 
+ 
+Technology Stack Summary 
+Component 
+Technology 
+API Framework 
+NestJS (TypeScript) 
+Database 
+PostgreSQL 15 (via Prisma ORM) 
+Cache / Session 
+Redis 7 (ioredis) 
+Queue System 
+BullMQ (Redis-backed) 
+Object Storage 
+AWS S3 (multipart uploads) 
+CDN 
+AWS CloudFront (signed URLs) 
+Video Processing 
+FFmpeg (HLS segmentation) 
+Authentication 
+JWT (access + refresh tokens) 
+Containerization 
+Docker + Docker Compose 
+Reverse Proxy / LB 
+Nginx (upstream load balancing) 
+ 
+2. High-Level Architecture Diagram 
+ 
+The following ASCII diagram illustrates all layers of the system, from client to data persistence. Each component is described in detail in subsequent sections. 
+ 
+┌─────────────────────────────────────────────────────────────────────┐ 
+│                        CLIENT LAYER                                  │ 
+│          Web App (React)  │  Mobile (React Native)  │  Admin SPA     │ 
+└────────────────────────────────┬────────────────────────────────────┘ 
+                                 │ HTTPS 
+┌────────────────────────────────▼────────────────────────────────────┐ 
+│                  NGINX LOAD BALANCER (Layer 7)                       │ 
+│     SSL Termination │ Rate Limiting │ Upstream Routing               │ 
+└──────────┬──────────────────────────────────────┬───────────────────┘ 
+           │                                       │ 
+┌──────────▼──────────┐                 ┌──────────▼──────────────────┐ 
+│   NestJS Instance 1  │   ...           │   NestJS Instance N         │ 
+│  (Modular Monolith)  │                 │  (Modular Monolith)         │ 
+└──────────┬───────────┘                 └──────────┬──────────────────┘ 
+           └───────────────────┬───────────────────┘ 
+                               │ 
+         ┌─────────────────────┼──────────────────────┐ 
+         │                     │                      │ 
+┌────────▼──────┐   ┌──────────▼────────┐  ┌──────────▼──────────────┐ 
+│  PostgreSQL   │   │   Redis Cluster   │  │   BullMQ Workers        │ 
+│  (Primary +   │   │  Cache + Sessions │  │  (Video, Email, Notif)  │ 
+│   Replicas)   │   │  + Rate Limiting  │  └──────────┬──────────────┘ 
+└───────────────┘   └───────────────────┘             │ 
+                                              ┌────────▼───────────┐ 
+                                              │     AWS S3          │ 
+                                              │  (Raw uploads +     │ 
+                                              │   HLS segments)     │ 
+                                              └────────┬────────────┘ 
+                                                       │ 
+                                              ┌────────▼────────────┐ 
+                                              │  CloudFront CDN     │ 
+                                              │  (Signed URLs,      │ 
+                                              │   Global Edge)      │ 
+                                              └─────────────────────┘ 
+ 
+Request Flow (Subscriber Watching Premium Video) 
+Client sends GET /posts/:id/stream with Bearer JWT token 
+Nginx forwards to available NestJS instance 
+Auth Guard validates JWT (Redis blacklist check) 
+Subscription Guard verifies active subscription in Redis cache (fallback: DB) 
+Content Guard checks post visibility (subscriber-only vs free) 
+API generates CloudFront signed URL (15-min TTL) for HLS master playlist 
+Client fetches HLS .m3u8 from CloudFront — segments load from S3 via CDN 
+ 
+3. Modular Monolith — Module Breakdown 
+ 
+The application is structured as a NestJS Modular Monolith. Each module maps to a bounded domain context and communicates only via defined interfaces — ensuring zero circular dependencies and clean extraction to microservices when needed. 
+ 
+Module 
+Responsibility 
+Key Services 
+AuthModule 
+JWT login, register, refresh, logout, OAuth 
+AuthService, JwtStrategy, TokenService 
+UsersModule 
+User profiles, roles, follow system 
+UsersService, FollowService 
+CreatorsModule 
+Creator profiles, earnings, dashboard 
+CreatorService, EarningsService 
+PostsModule 
+CRUD posts, visibility (free/premium) 
+PostsService, ContentGuard 
+MediaModule 
+S3 upload, signed URLs, CDN delivery 
+S3Service, CloudFrontService 
+VideoModule 
+HLS processing queue, playback state 
+VideoService, HlsService 
+SubscriptionsModule 
+Subscription lifecycle, verification 
+SubscriptionService, AccessGuard 
+PaymentsModule 
+Stripe integration, webhooks, billing 
+PaymentsService, WebhookHandler 
+PayoutsModule 
+Creator payout scheduling and transfer 
+PayoutService, StripeConnectService 
+FeedModule 
+Personalized feed generation and caching 
+FeedService, FeedAggregator 
+InteractionsModule 
+Likes, comments, shares, bookmarks 
+LikeService, CommentService 
+NotificationsModule 
+In-app + email + push notifications 
+NotifService, EmailService 
+SearchModule 
+Creator and post search (full-text) 
+SearchService, ElasticService 
+AdminModule 
+Platform administration, moderation 
+AdminService, ModerationService 
+AnalyticsModule 
+Creator analytics, platform metrics 
+AnalyticsService, MetricsService 
+StorageModule 
+Shared S3/CDN provider (global) 
+StorageProvider 
+CacheModule 
+Shared Redis provider (global) 
+CacheProvider, RedisService 
+QueueModule 
+Shared BullMQ provider (global) 
+QueueProvider, JobFactory 
+ 
+Module Dependency Rules 
+No circular dependencies between modules — enforced via NestJS DI 
+Shared services (Cache, Storage, Queue) are global modules imported once 
+Cross-module communication: use EventEmitter2 (sync) or BullMQ jobs (async) 
+Guards are applied at the route level — never embed access logic in services 
+DTOs and entities are co-located within the module (not shared globally) 
+ 
+Guard Execution Chain (per Request) 
+Request 
+  → ThrottleGuard         (rate limiting via Redis) 
+  → JwtAuthGuard          (validate access token) 
+  → RolesGuard            (check ADMIN/CREATOR/USER role) 
+  → SubscriptionGuard     (verify active subscription if premium route) 
+  → ContentOwnerGuard     (check resource ownership for mutations) 
+  → Controller Handler    (business logic) 
+ 
+4. Complete Backend Folder Structure 
+ 
+creator-platform/ 
+├── docker/ 
+│   ├── nginx/             # nginx.conf, upstream config 
+│   ├── postgres/          # init scripts, pg_hba.conf 
+│   └── redis/             # redis.conf, ACL 
+├── prisma/ 
+│   ├── schema.prisma      # full data model 
+│   ├── migrations/        # versioned migration files 
+│   └── seed.ts            # seed admin + test data 
+├── src/ 
+│   ├── main.ts            # bootstrap (Helmet, CORS, pipes) 
+│   ├── app.module.ts      # root module, global imports 
+│   ├── config/ 
+│   │   ├── app.config.ts 
+│   │   ├── database.config.ts 
+│   │   ├── redis.config.ts 
+│   │   ├── aws.config.ts 
+│   │   └── jwt.config.ts 
+│   ├── common/ 
+│   │   ├── decorators/    # @CurrentUser, @Roles, @Public 
+│   │   ├── filters/       # HttpExceptionFilter, PrismaFilter 
+│   │   ├── guards/        # JwtAuthGuard, RolesGuard, SubscriptionGuard 
+│   │   ├── interceptors/  # LoggingInterceptor, TransformInterceptor 
+│   │   ├── pipes/         # ZodValidationPipe 
+│   │   ├── middlewares/   # CorrelationIdMiddleware 
+│   │   └── utils/         # pagination, slug, crypto 
+│   ├── modules/ 
+│   │   ├── auth/ 
+│   │   │   ├── auth.module.ts 
+│   │   │   ├── auth.controller.ts 
+│   │   │   ├── auth.service.ts 
+│   │   │   ├── strategies/   # jwt.strategy.ts, refresh.strategy.ts 
+│   │   │   ├── dto/ 
+│   │   │   └── types/ 
+│   │   ├── users/ 
+│   │   │   ├── users.module.ts 
+│   │   │   ├── users.controller.ts 
+│   │   │   ├── users.service.ts 
+│   │   │   ├── follow.service.ts 
+│   │   │   └── dto/ 
+│   │   ├── creators/ 
+│   │   │   ├── creators.module.ts 
+│   │   │   ├── creators.controller.ts 
+│   │   │   ├── creators.service.ts 
+│   │   │   ├── earnings.service.ts 
+│   │   │   └── dto/ 
+│   │   ├── posts/ 
+│   │   │   ├── posts.module.ts 
+│   │   │   ├── posts.controller.ts 
+│   │   │   ├── posts.service.ts 
+│   │   │   ├── content.guard.ts 
+│   │   │   └── dto/ 
+│   │   ├── media/ 
+│   │   │   ├── media.module.ts 
+│   │   │   ├── media.controller.ts 
+│   │   │   ├── s3.service.ts 
+│   │   │   ├── cloudfront.service.ts 
+│   │   │   └── dto/ 
+│   │   ├── video/ 
+│   │   │   ├── video.module.ts 
+│   │   │   ├── video.processor.ts  # BullMQ worker 
+│   │   │   ├── hls.service.ts 
+│   │   │   └── dto/ 
+│   │   ├── subscriptions/ 
+│   │   │   ├── subscriptions.module.ts 
+│   │   │   ├── subscriptions.controller.ts 
+│   │   │   ├── subscriptions.service.ts 
+│   │   │   ├── subscription.guard.ts 
+│   │   │   └── dto/ 
+│   │   ├── payments/ 
+│   │   │   ├── payments.module.ts 
+│   │   │   ├── payments.controller.ts 
+│   │   │   ├── payments.service.ts 
+│   │   │   ├── stripe-webhook.controller.ts 
+│   │   │   └── dto/ 
+│   │   ├── payouts/ 
+│   │   │   ├── payouts.module.ts 
+│   │   │   ├── payouts.service.ts 
+│   │   │   └── stripe-connect.service.ts 
+│   │   ├── feed/ 
+│   │   │   ├── feed.module.ts 
+│   │   │   ├── feed.controller.ts 
+│   │   │   ├── feed.service.ts 
+│   │   │   └── feed.aggregator.ts 
+│   │   ├── interactions/ 
+│   │   │   ├── interactions.module.ts 
+│   │   │   ├── like.service.ts 
+│   │   │   ├── comment.service.ts 
+│   │   │   └── dto/ 
+│   │   ├── notifications/ 
+│   │   │   ├── notifications.module.ts 
+│   │   │   ├── notifications.service.ts 
+│   │   │   ├── email.service.ts 
+│   │   │   └── push.service.ts 
+│   │   ├── search/ 
+│   │   ├── admin/ 
+│   │   └── analytics/ 
+│   └── jobs/ 
+│       ├── video.processor.ts 
+│       ├── email.processor.ts 
+│       ├── notification.processor.ts 
+│       ├── payout.processor.ts 
+│       └── feed.processor.ts 
+├── test/ 
+│   ├── e2e/               # full API integration tests 
+│   └── unit/              # service-level unit tests 
+├── .env.example 
+├── docker-compose.yml 
+├── docker-compose.prod.yml 
+└── Dockerfile 
+ 
+5. Database Schema Design 
+ 
+PostgreSQL 15 with Prisma ORM. All primary keys use CUID2 (collision-resistant, URL-safe). Soft deletes use deletedAt timestamps. All money values stored in cents (integer) to avoid float precision errors. 
+ 
+Core Entity Tables 
+Table 
+Purpose 
+users 
+All platform users (Admin/Creator/Subscriber roles) 
+creator_profiles 
+Extended creator info (bio, cover, payout, subscription price) 
+subscriptions 
+Active/cancelled subscription records per user-creator pair 
+posts 
+Content posts (text/image/video), visibility flag 
+media_assets 
+S3 objects, HLS playlists, thumbnails per post 
+video_jobs 
+FFmpeg processing job state machine 
+likes 
+Post likes (composite unique: userId + postId) 
+comments 
+Threaded comments with parentId for nesting 
+follows 
+User ↔ Creator follow relationships 
+payments 
+Stripe payment records, status, amount, fee 
+payouts 
+Creator payout batches and Stripe transfer records 
+notifications 
+In-app notification records with read status 
+refresh_tokens 
+Stored refresh token hashes with device/IP metadata 
+audit_logs 
+Immutable admin action log 
+ 
+Key Schema Fields — users 
+model User { 
+  id            String    @id @default(cuid()) 
+  email         String    @unique 
+  username      String    @unique 
+  passwordHash  String 
+  role          Role      @default(SUBSCRIBER)  // ADMIN | CREATOR | SUBSCRIBER 
+  isVerified    Boolean   @default(false) 
+  isActive      Boolean   @default(true) 
+  avatarUrl     String? 
+  createdAt     DateTime  @default(now()) 
+  updatedAt     DateTime  @updatedAt 
+  deletedAt     DateTime?  // soft delete 
+  // Relations 
+  creatorProfile   CreatorProfile? 
+  subscriptions    Subscription[]  @relation("SubscriberSubs") 
+  posts            Post[] 
+  likes            Like[] 
+  comments         Comment[] 
+  follows          Follow[]        @relation("Follower") 
+  followedBy       Follow[]        @relation("Following") 
+  refreshTokens    RefreshToken[] 
+  notifications    Notification[] 
+} 
+ 
+Key Schema Fields — creator_profiles 
+model CreatorProfile { 
+  id                String   @id @default(cuid()) 
+  userId            String   @unique 
+  displayName       String 
+  bio               String? 
+  coverImageUrl     String? 
+  subscriptionPrice Int      // price in cents (e.g., 999 = $9.99) 
+  stripeProductId   String?  // Stripe product for subscription 
+  stripePriceId     String?  // Stripe recurring price 
+  stripeAccountId   String?  // Stripe Connect for payouts 
+  totalEarnings     Int      @default(0)  // lifetime earnings in cents 
+  pendingPayout     Int      @default(0) 
+  isVerified        Boolean  @default(false) 
+  createdAt         DateTime @default(now()) 
+  user              User     @relation(fields: [userId]) 
+  posts             Post[] 
+  subscriptions     Subscription[] 
+  payouts           Payout[] 
+  @@index([userId]) 
+} 
+ 
+Key Schema Fields — subscriptions 
+model Subscription { 
+  id                String             @id @default(cuid()) 
+  subscriberId      String 
+  creatorProfileId  String 
+  status            SubscriptionStatus // ACTIVE | CANCELLED | PAST_DUE | PAUSED 
+  stripeSubId       String             @unique 
+  currentPeriodStart DateTime 
+  currentPeriodEnd   DateTime 
+  cancelAtPeriodEnd  Boolean           @default(false) 
+  priceAtSubscription Int              // snapshot of price in cents 
+  createdAt         DateTime           @default(now()) 
+  subscriber        User               @relation("SubscriberSubs") 
+  creatorProfile    CreatorProfile 
+  payments          Payment[] 
+  @@unique([subscriberId, creatorProfileId]) 
+  @@index([subscriberId]) 
+  @@index([creatorProfileId]) 
+  @@index([status]) 
+  @@index([currentPeriodEnd]) 
+} 
+ 
+Key Schema Fields — posts & media_assets 
+model Post { 
+  id               String      @id @default(cuid()) 
+  creatorProfileId String 
+  title            String? 
+  body             String? 
+  type             PostType    // TEXT | IMAGE | VIDEO 
+  visibility       Visibility  // PUBLIC | SUBSCRIBERS_ONLY 
+  isPublished      Boolean     @default(false) 
+  publishedAt      DateTime? 
+  likeCount        Int         @default(0)  // denormalized counter 
+  commentCount     Int         @default(0) 
+  viewCount        Int         @default(0) 
+  createdAt        DateTime    @default(now()) 
+  deletedAt        DateTime? 
+  creator          CreatorProfile 
+  mediaAssets      MediaAsset[] 
+  likes            Like[] 
+  comments         Comment[] 
+  @@index([creatorProfileId, publishedAt(sort: Desc)]) 
+  @@index([visibility, isPublished]) 
+} 
+ 
+model MediaAsset { 
+  id           String          @id @default(cuid()) 
+  postId       String 
+  type         MediaType       // VIDEO | IMAGE | THUMBNAIL | HLS_PLAYLIST 
+  s3Key        String          @unique 
+  s3Bucket     String 
+  sizeBytes    BigInt 
+  mimeType     String 
+  width        Int? 
+  height       Int? 
+  durationSecs Int?            // for video 
+  hlsMasterKey String?         // S3 key of HLS master.m3u8 
+  status       AssetStatus     // PENDING | PROCESSING | READY | FAILED 
+  createdAt    DateTime        @default(now()) 
+  post         Post 
+  videoJob     VideoJob? 
+  @@index([postId]) 
+  @@index([status]) 
+} 
+ 
+6. Prisma Model Relationships 
+ 
+Entity Relationship Summary 
+User ─────────────── 1:1 ─── CreatorProfile 
+                      1:N ─── Subscription (as subscriber) 
+                      1:N ─── Post (via CreatorProfile) 
+                      1:N ─── Like 
+                      1:N ─── Comment 
+                      M:N ─── User (Follow relationship) 
+                      1:N ─── RefreshToken 
+ 
+CreatorProfile ──── 1:N ─── Post 
+                    1:N ─── Subscription (as creator) 
+                    1:N ─── Payout 
+ 
+Post ───────────── 1:N ─── MediaAsset 
+                   1:N ─── Like 
+                   1:N ─── Comment 
+ 
+MediaAsset ──────── 1:1 ─── VideoJob 
+ 
+Subscription ──────1:N ─── Payment 
+ 
+Follow Relationship (Self-referential M:N) 
+model Follow { 
+  id           String   @id @default(cuid()) 
+  followerId   String   // user who follows 
+  followingId  String   // creator being followed 
+  createdAt    DateTime @default(now()) 
+  follower     User     @relation("Follower", fields: [followerId]) 
+  following    User     @relation("Following", fields: [followingId]) 
+  @@unique([followerId, followingId]) 
+  @@index([followerId]) 
+  @@index([followingId]) 
+} 
+ 
+// Note: Follow = social signal (free). Subscription = paid access. 
+// A user can follow without subscribing (to see free content + updates) 
+ 
+Comment Threading 
+model Comment { 
+  id        String    @id @default(cuid()) 
+  postId    String 
+  userId    String 
+  parentId  String?   // null = top-level, set = reply 
+  body      String 
+  isHidden  Boolean   @default(false)  // moderation 
+  createdAt DateTime  @default(now()) 
+  deletedAt DateTime? 
+  post      Post 
+  user      User 
+  parent    Comment?  @relation("CommentThread", fields: [parentId]) 
+  replies   Comment[] @relation("CommentThread") 
+  @@index([postId, createdAt(sort: Desc)]) 
+  @@index([parentId]) 
+} 
+ 
+Subscription Guard — Access Verification Logic 
+// Pseudo-code: SubscriptionGuard.canActivate() 
+ 
+1. Extract creatorId from route params 
+2. Check Redis: GET sub:{userId}:{creatorId} 
+   → cache hit with status=ACTIVE → ALLOW 
+   → cache miss → query DB: 
+     SELECT status, currentPeriodEnd FROM subscriptions 
+     WHERE subscriberId=userId AND creatorProfileId=creatorId 
+       AND status=ACTIVE AND currentPeriodEnd > NOW() 
+   → found → cache in Redis TTL=300s → ALLOW 
+   → not found → DENY (403 Forbidden) 
+ 
+// Admin and the Creator themselves bypass the guard 
+ 
+7. API Design & Endpoint Reference 
+ 
+RESTful API. All routes prefixed with /api/v1. Protected routes require Authorization: Bearer <token>. Pagination uses cursor-based strategy for feeds (better performance than offset at scale). 
+ 
+Auth Endpoints 
+Method + Path 
+Auth 
+Description 
+POST /auth/register 
+Public 
+Register new user 
+POST /auth/login 
+Public 
+Login, return access + refresh token 
+POST /auth/refresh 
+Refresh Token 
+Rotate refresh token pair 
+POST /auth/logout 
+JWT 
+Revoke refresh token, blacklist access token 
+POST /auth/verify-email/:token 
+Public 
+Email verification 
+POST /auth/forgot-password 
+Public 
+Send reset email 
+POST /auth/reset-password 
+Public 
+Complete password reset 
+ 
+Creator Endpoints 
+Method + Path 
+Auth 
+Description 
+GET /creators 
+Public 
+Browse/search creators (paginated) 
+GET /creators/:username 
+Public 
+Creator public profile 
+POST /creators/profile 
+Creator JWT 
+Create creator profile 
+PATCH /creators/profile 
+Creator JWT 
+Update bio, cover, price 
+GET /creators/dashboard/earnings 
+Creator JWT 
+Earnings stats + chart data 
+GET /creators/dashboard/subscribers 
+Creator JWT 
+Subscriber list + analytics 
+ 
+Posts Endpoints 
+Method + Path 
+Auth 
+Description 
+POST /posts 
+Creator JWT 
+Create post (returns upload URLs) 
+GET /posts/:id 
+JWT (guarded) 
+Get post detail (sub guard if premium) 
+PATCH /posts/:id 
+Creator JWT 
+Edit post 
+DELETE /posts/:id 
+Creator JWT 
+Soft delete post 
+GET /posts/:id/stream 
+JWT + Sub Guard 
+Get signed CloudFront URL for HLS 
+POST /posts/:id/like 
+JWT 
+Toggle like 
+GET /posts/:id/comments 
+JWT 
+Get paginated comments 
+POST /posts/:id/comments 
+JWT 
+Add comment (or reply) 
+DELETE /comments/:id 
+JWT 
+Delete own comment 
+ 
+Subscription & Payment Endpoints 
+Method + Path 
+Auth 
+Description 
+POST /subscriptions/checkout 
+JWT 
+Create Stripe Checkout Session 
+POST /subscriptions/cancel 
+JWT 
+Cancel at period end 
+GET /subscriptions/my 
+JWT 
+List active subscriptions 
+POST /payments/webhook 
+Stripe Sig 
+Stripe webhook receiver 
+GET /payouts/history 
+Creator JWT 
+Creator payout history 
+ 
+Feed & Media Endpoints 
+Method + Path 
+Auth 
+Description 
+GET /feed 
+JWT 
+Personal feed (cursor paginated) 
+GET /feed/explore 
+Public 
+Trending posts for explore tab 
+POST /media/upload/initiate 
+Creator JWT 
+Get S3 presigned URL for direct upload 
+POST /media/upload/complete 
+Creator JWT 
+Confirm upload, trigger video job 
+GET /notifications 
+JWT 
+Paginated notifications 
+PATCH /notifications/read-all 
+JWT 
+Mark all as read 
+ 
+Pagination Strategy 
+// Cursor-based pagination (feed, comments) 
+GET /feed?cursor=<postId>&limit=20 
+ 
+// Response format 
+{ 
+  "data": [...], 
+  "meta": { 
+    "nextCursor": "clx9abc123",  // null if last page 
+    "hasMore": true, 
+    "limit": 20 
+  } 
+} 
+ 
+// DB Query: WHERE id < :cursor ORDER BY createdAt DESC LIMIT 21 
+// If 21 results returned, hasMore=true, return first 20 
+ 
+8. Authentication & Security Architecture 
+ 
+JWT Token Strategy 
+Token Type 
+Details 
+Access Token 
+JWT, 15-minute TTL, HS256, carries role + userId in payload 
+Refresh Token 
+Opaque UUID v4, 30-day TTL, hashed with bcrypt before DB storage 
+Rotation Policy 
+Each use issues a new refresh token; old one revoked immediately 
+Revocation 
+Access token JTI blacklisted in Redis (TTL = remaining token lifetime) 
+Token Family 
+Refresh token family tracked — reuse of revoked token = full family wipe 
+ 
+Password & Data Security 
+Passwords hashed with bcrypt (cost factor 12) 
+All secrets in environment variables — never in code or version control 
+PII encrypted at rest in DB using @encrypted Prisma extension for sensitive fields 
+All inter-service communication over TLS 1.3 
+Database connection strings use SSL mode=require 
+ 
+Rate Limiting — Redis-backed (nestjs-throttler) 
+Endpoint Group 
+Limit 
+Window 
+POST /auth/login 
+5 requests 
+15 minutes (per IP) 
+POST /auth/register 
+3 requests 
+1 hour (per IP) 
+POST /auth/forgot-password 
+3 requests 
+1 hour (per email) 
+General API (authenticated) 
+300 requests 
+1 minute (per userId) 
+Media upload initiate 
+10 requests 
+1 hour (per userId) 
+POST /payments/webhook 
+Unlimited 
+Stripe IP whitelist only 
+ 
+API Security Checklist 
+Helmet.js: sets X-Frame-Options, HSTS, CSP, X-Content-Type-Options 
+CORS: whitelist production domain(s) only 
+Request body size limit: 100KB (JSON), unlimited for presigned S3 uploads 
+Input validation: class-validator on all DTOs, Zod for complex schemas 
+SQL injection prevention: Prisma uses parameterized queries exclusively 
+Stripe webhook verification: raw body + stripe-signature header validation 
+CloudFront signed URLs: RSA-2048 key pair, 15-min expiry for video access 
+S3 bucket policy: block all public access; objects accessible only via CloudFront 
+Correlation ID middleware: every request tagged for distributed tracing 
+Admin routes: additional IP allowlist via Nginx for /api/v1/admin/* 
+ 
+Signed URL Flow for Video Streaming 
+1. Client authenticates → receives JWT 
+2. Client calls GET /posts/:id/stream 
+3. Server: validate JWT + SubscriptionGuard check 
+4. Server: CloudFrontService.generateSignedUrl({ 
+     url: `https://cdn.platform.com/${hlsMasterKey}`, 
+     dateLessThan: now + 15min, 
+     keyPairId: process.env.CF_KEY_PAIR_ID, 
+     privateKey: process.env.CF_PRIVATE_KEY 
+   }) 
+5. Server returns: { streamUrl: "https://cdn.platform.com/hls/xxx/master.m3u8?Policy=...&Signature=...&Key-Pair-Id=..." } 
+6. Client video player fetches m3u8 + segments via signed CDN URL 
+7. After 15 min: player calls /stream again to refresh URL 
+ 
+9. Video Processing & HLS Streaming Pipeline 
+ 
+Upload Flow — Direct S3 Upload (No Server Bottleneck) 
+Creator calls POST /media/upload/initiate with filename, size, mimeType 
+Server validates creator auth + generates S3 presigned PUT URL (15-min expiry) 
+Client uploads video file DIRECTLY to S3 (bypasses NestJS server completely) 
+Client calls POST /media/upload/complete with assetId 
+Server sets MediaAsset.status = PROCESSING, enqueues BullMQ job: video:process 
+Worker picks up job, downloads from S3, runs FFmpeg, uploads HLS segments back 
+Worker updates MediaAsset.status = READY and hlsMasterKey 
+Server emits SSE/WebSocket notification: "Your video is ready" 
+ 
+FFmpeg HLS Transcoding — Multi-Bitrate Ladder 
+ffmpeg -i input.mp4 \ 
+ 
+  # 360p stream 
+  -vf scale=640:360 -b:v 800k -c:v libx264 -c:a aac -b:a 96k \ 
+  -hls_time 6 -hls_playlist_type vod \ 
+  -hls_segment_filename "360p_%03d.ts" 360p.m3u8 \ 
+ 
+  # 720p stream 
+  -vf scale=1280:720 -b:v 2500k -c:v libx264 -c:a aac -b:a 128k \ 
+  -hls_time 6 -hls_playlist_type vod \ 
+  -hls_segment_filename "720p_%03d.ts" 720p.m3u8 \ 
+ 
+  # 1080p stream 
+  -vf scale=1920:1080 -b:v 5000k -c:v libx264 -c:a aac -b:a 192k \ 
+  -hls_time 6 -hls_playlist_type vod \ 
+  -hls_segment_filename "1080p_%03d.ts" 1080p.m3u8 
+ 
+# Then generate master.m3u8 pointing to all variants 
+ 
+HLS Master Playlist (master.m3u8) 
+#EXTM3U 
+#EXT-X-VERSION:3 
+#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=640x360 
+hls/post-abc123/360p.m3u8 
+#EXT-X-STREAM-INF:BANDWIDTH=2700000,RESOLUTION=1280x720 
+hls/post-abc123/720p.m3u8 
+#EXT-X-STREAM-INF:BANDWIDTH=5200000,RESOLUTION=1920x1080 
+hls/post-abc123/1080p.m3u8 
+ 
+S3 File Organization 
+s3://platform-media/ 
+├── uploads/ 
+│   └── raw/{postId}/{filename}         # original upload (temp, TTL 24h) 
+├── hls/ 
+│   └── {postId}/ 
+│       ├── master.m3u8 
+│       ├── 360p.m3u8 
+│       ├── 360p_000.ts  ... 360p_099.ts 
+│       ├── 720p.m3u8 
+│       ├── 720p_000.ts  ... 
+│       ├── 1080p.m3u8 
+│       └── 1080p_000.ts ... 
+├── images/ 
+│   └── {postId}/{assetId}.webp          # optimized, original kept 
+└── avatars/ 
+    └── {userId}/{size}.webp             # 64px, 128px, 256px variants 
+ 
+VideoJob State Machine 
+PENDING → DOWNLOADING → TRANSCODING → UPLOADING_SEGMENTS → READY 
+                                                         ↓ 
+                                                      FAILED (retryable) 
+ 
+// BullMQ job options: 
+{ 
+  attempts: 3, 
+  backoff: { type: "exponential", delay: 5000 }, 
+  removeOnComplete: { count: 100 }, 
+  removeOnFail: { count: 50 } 
+} 
+ 
+10. Redis Caching Strategy 
+ 
+Redis serves 4 distinct roles: application cache, session/token store, rate limiting counter, and BullMQ queue backend. All keys follow a consistent naming convention. 
+ 
+Cache Key Taxonomy 
+Key Pattern 
+TTL 
+Content 
+user:{id} 
+300s 
+User profile object (JSON) 
+creator:{id} 
+600s 
+Creator profile + stats 
+creator:slug:{username} 
+600s 
+Creator ID lookup by username 
+sub:{userId}:{creatorId} 
+300s 
+Subscription status (ACTIVE/null) 
+post:{id} 
+120s 
+Post metadata (no body for large posts) 
+feed:{userId}:cursor:{c} 
+60s 
+Feed page result set 
+feed:explore 
+30s 
+Trending explore feed (global) 
+post:{id}:likes 
+60s 
+Like count (write-behind to DB) 
+post:{id}:views 
+120s 
+View count (write-behind to DB) 
+token:blacklist:{jti} 
+Token TTL 
+Revoked access token JTIs 
+ratelimit:{ip}:{route} 
+Window 
+Rate limit counter 
+notif:unread:{userId} 
+120s 
+Unread notification count 
+ 
+Write Strategies 
+Pattern 
+Used For 
+Cache-aside (lazy load) 
+User profiles, creator profiles, post metadata 
+Write-through 
+Subscription status — written on Stripe webhook + cached 
+Write-behind (async) 
+Like counts, view counts — batched to DB every 60s via BullMQ job 
+Cache invalidation on write 
+Post edited → delete post:{id} + feed cache for creator followers 
+ 
+Redis Cluster Configuration 
+# Production: 3 master + 3 replica nodes (Redis Cluster mode) 
+# ElastiCache r7g.large (8GB RAM per node) 
+ 
+# Key distribution: 
+# - Cache keys → Cluster slot by key hash 
+# - BullMQ queues → dedicated Redis instance (separate from cache) 
+# - Session/rate-limit → cache cluster 
+ 
+# Memory policy: allkeys-lru (evict least recently used on memory pressure) 
+# Persistence: AOF with everysec fsync for queue Redis 
+# No persistence needed for pure cache Redis 
+ 
+11. BullMQ Queue Architecture 
+ 
+Queue Name 
+Jobs 
+Concurrency 
+video:process 
+transcode, generate-thumbnail, cleanup-raw 
+2 (CPU-bound) 
+email:send 
+welcome, verify, reset-password, receipt 
+10 
+notification:dispatch 
+new-post, new-subscriber, comment, like 
+20 
+payout:process 
+calculate-earnings, initiate-transfer, notify 
+3 
+feed:invalidate 
+invalidate creator follower feeds on new post 
+10 
+analytics:record 
+view event, like event, subscription event 
+30 
+media:cleanup 
+delete raw S3 uploads after HLS complete 
+5 
+subscription:check 
+cron: expired subscription scan (every hour) 
+1 
+ 
+BullMQ Producer Pattern (PostsService) 
+// When a creator publishes a post: 
+await this.queueService.add("notification:dispatch", { 
+  type: "NEW_POST", 
+  postId: post.id, 
+  creatorId: post.creatorProfileId, 
+}, { priority: 1 }); 
+ 
+await this.queueService.add("feed:invalidate", { 
+  creatorId: post.creatorProfileId, 
+}, { delay: 500 }); // slight delay to let DB commit 
+ 
+// Video post: media upload complete triggers: 
+await this.queueService.add("video:process", { 
+  assetId: asset.id, 
+  s3Key: asset.s3Key, 
+  postId: asset.postId, 
+}, { attempts: 3 }); 
+ 
+Cron Jobs (BullMQ Repeatable) 
+Cron Job 
+Schedule 
+Scan expired subscriptions → set PAST_DUE 
+Every 1 hour 
+Flush Redis counters to PostgreSQL (likes/views) 
+Every 60 seconds 
+Creator payout batch calculation 
+Monthly (1st, 02:00 UTC) 
+Cleanup orphaned raw S3 uploads (>48h) 
+Daily 03:00 UTC 
+Send weekly analytics email to creators 
+Weekly Monday 09:00 
+ 
+12. CloudFront CDN Integration 
+ 
+Distribution Architecture 
+Origin: AWS S3 (private bucket) 
+Domain: cdn.platform.com (custom domain + ACM cert) 
+ 
+Behaviors: 
+├── /hls/*         → Origin S3, Signed URLs REQUIRED, TTL=86400s 
+├── /images/*      → Origin S3, Signed URLs optional, TTL=604800s (1 week) 
+├── /avatars/*     → Origin S3, Public (no signing needed), TTL=86400s 
+└── /api/*         → Origin NestJS ALB (NOT S3), no caching 
+ 
+Cache Policy: 
+├── HLS segments (.ts):  Cache 24h at edge (content is immutable) 
+├── HLS playlists (.m3u8): Cache 5 minutes (may update during live) 
+├── Images (.webp):       Cache 7 days 
+└── Master playlist:      Cache 1 hour 
+ 
+Edge Locations: enabled globally (Creator content may be global) 
+Price Class: PriceClass_100 initially (optimize cost), expand as needed 
+ 
+S3 Bucket Policy (Restrict to CloudFront OAC) 
+{ 
+  "Statement": [{ 
+    "Effect": "Allow", 
+    "Principal": { "Service": "cloudfront.amazonaws.com" }, 
+    "Action": "s3:GetObject", 
+    "Resource": "arn:aws:s3:::platform-media/*", 
+    "Condition": { 
+      "StringEquals": { 
+        "AWS:SourceArn": "arn:aws:cloudfront::ACCOUNT:distribution/DIST_ID" 
+      } 
+    } 
+  }] 
+} 
+ 
+// OAC (Origin Access Control) is the modern replacement for OAI 
+// All S3 objects remain private — NEVER add public-read ACL 
+ 
+13. Payment & Creator Payout Workflow 
+ 
+Subscription Payment Flow (Stripe) 
+User clicks "Subscribe" on creator profile 
+POST /subscriptions/checkout → creates Stripe Checkout Session (mode: subscription) 
+User completes payment on Stripe-hosted page 
+Stripe sends webhook: checkout.session.completed 
+Webhook handler creates Subscription record in DB (status: ACTIVE) 
+Redis: SET sub:{userId}:{creatorId} = ACTIVE, TTL=300s 
+BullMQ: enqueue notification:dispatch (welcome message to subscriber) 
+Stripe handles monthly recurring charges automatically 
+ 
+Webhook Events Handled 
+Stripe Event 
+Action 
+checkout.session.completed 
+Create subscription record, cache active status 
+invoice.payment_succeeded 
+Update subscription period end, record payment, update creator earnings 
+invoice.payment_failed 
+Set subscription PAST_DUE, send dunning email via BullMQ 
+customer.subscription.deleted 
+Set subscription CANCELLED, clear Redis cache 
+customer.subscription.updated 
+Update cancelAtPeriodEnd flag if changed 
+ 
+Creator Payout Workflow 
+Platform Fee: 20% (configurable per creator tier) 
+Payout Schedule: Monthly on the 1st (30-day holding period) 
+ 
+Flow: 
+1. Monthly cron job runs: payout:process queue 
+2. PayoutService queries: earnings since last payout - platform_fee 
+3. Stripe Connect Transfer: platform account → creator Stripe account 
+4. Record Payout row with stripeTransferId 
+5. Reset CreatorProfile.pendingPayout to 0 
+6. Send payout confirmation email + update dashboard 
+ 
+Creator Onboarding for Payouts: 
+- Creator completes Stripe Connect Express onboarding 
+- Receives stripeAccountId, stored in CreatorProfile 
+- Stripe handles KYC/AML, tax form collection (1099) 
+ 
+14. Feed Generation Strategy 
+ 
+The feed uses a hybrid push-pull strategy. Fan-out-on-write for users who follow ≤500 creators (push). Fan-out-on-read for high-follower creators (pull). This is the same model used by Twitter/X. 
+ 
+Feed Generation Strategies 
+Strategy 
+Use Case 
+Push (fan-out on write) 
+Normal creators (≤500 followers): new post ID pushed into each follower's feed list in Redis 
+Pull (fan-out on read) 
+High-follower creators (>500): post fetched from DB at read time and merged into feed 
+Explore feed 
+Trending posts globally — sorted by (likes + comments) / age² (time decay), cached 30s 
+Cursor pagination 
+Redis sorted set per user: ZSET feed:{userId} score=timestamp, member=postId 
+ 
+Feed Push Implementation 
+// On new post published (feed.processor.ts): 
+const followers = await prisma.follow.findMany({ 
+  where: { followingId: creatorId }, 
+  select: { followerId: true } 
+}); 
+ 
+const pipeline = redis.pipeline(); 
+for (const { followerId } of followers) { 
+  pipeline.zadd( 
+    `feed:${followerId}`, 
+    Date.now(), 
+    postId 
+  ); 
+  pipeline.zremrangebyrank(`feed:${followerId}`, 0, -501); // keep 500 entries 
+} 
+await pipeline.exec(); 
+ 
+Feed Read Implementation 
+// GET /feed?cursor=<timestamp>&limit=20 
+const postIds = await redis.zrangebyscore( 
+  `feed:${userId}`, '-inf', cursor ?? '+inf', 
+  'LIMIT', 0, 21 
+); 
+ 
+// If feed cache miss, fall back to DB: 
+const posts = await prisma.post.findMany({ 
+  where: { 
+    creatorProfile: { subscriptions: { some: { subscriberId: userId, status: "ACTIVE" } } } 
+    OR: [{ visibility: "PUBLIC" }] 
+  }, 
+  orderBy: { publishedAt: "desc" }, 
+  take: 21, 
+  cursor: cursor ? { id: cursor } : undefined 
+}); 
+ 
+15. Notification Architecture 
+ 
+Notification Channels 
+Channel 
+Implementation 
+In-app (real-time) 
+Server-Sent Events (SSE) endpoint /notifications/stream — client subscribes 
+In-app (stored) 
+Notification table in DB, unread count cached in Redis 
+Email 
+AWS SES via BullMQ email:send queue (Nodemailer + Handlebars templates) 
+Push (mobile) 
+Firebase Cloud Messaging (FCM) via notification:dispatch BullMQ queue 
+ 
+Notification Events 
+Event 
+Recipients 
+New post published 
+All followers of creator 
+New subscriber 
+Creator (1 notification) 
+Comment on post 
+Post creator + parent commenter 
+Post liked 
+Post creator (batched: 5 likes → 1 notification) 
+Subscription expiring 
+Subscriber (3 days before) 
+Payout completed 
+Creator 
+Payment failed 
+Subscriber 
+ 
+16. Database Indexing Strategy 
+ 
+Critical indexes for query performance at scale. All foreign keys indexed. Composite indexes aligned to actual query patterns. 
+ 
+Table / Index 
+Columns 
+Query Pattern 
+posts 
+(creatorProfileId, publishedAt DESC) 
+Creator profile page, feed 
+posts 
+(visibility, isPublished, publishedAt) 
+Explore feed filtering 
+subscriptions 
+(subscriberId, status) 
+SubscriptionGuard check 
+subscriptions 
+(creatorProfileId, status) 
+Creator subscriber list 
+subscriptions 
+(currentPeriodEnd) 
+Expiry cron scan 
+likes 
+(postId, userId) UNIQUE 
+Like toggle, count query 
+comments 
+(postId, createdAt DESC) 
+Comment listing 
+follows 
+(followerId) 
+Feed: get followed creators 
+follows 
+(followingId) 
+Creator: follower count 
+payments 
+(subscriptionId, createdAt) 
+Payment history 
+notifications 
+(userId, isRead, createdAt) 
+Notification inbox 
+media_assets 
+(postId, type) 
+Post media loading 
+ 
+PostgreSQL Configuration (production) 
+shared_buffers = 4GB          # 25% of RAM on 16GB instance 
+effective_cache_size = 12GB   # 75% of RAM 
+work_mem = 64MB               # per sort/hash operation 
+maintenance_work_mem = 1GB    # for VACUUM, CREATE INDEX 
+max_connections = 200         # use PgBouncer for connection pooling 
+wal_buffers = 64MB 
+checkpoint_completion_target = 0.9 
+random_page_cost = 1.1       # SSD storage 
+ 
+17. Horizontal Scaling & Load Balancing 
+ 
+NestJS Application Scaling 
+Stateless application instances — all state in Redis/PostgreSQL 
+Docker containers orchestrated via ECS (AWS) or Kubernetes 
+Auto Scaling Group: min 2, max 10 instances based on CPU/Request metrics 
+Health check endpoint: GET /health → checks DB ping + Redis ping 
+Graceful shutdown: SIGTERM → stop accepting requests, drain in-flight (30s timeout) 
+ 
+Nginx Load Balancer Configuration 
+upstream nestjs_app { 
+  least_conn;  # send to instance with fewest active connections 
+  server app1:3000 weight=1; 
+  server app2:3000 weight=1; 
+  server app3:3000 weight=1; 
+  keepalive 64; 
+} 
+ 
+server { 
+  listen 443 ssl http2; 
+  ssl_certificate /etc/ssl/cert.pem; 
+  ssl_certificate_key /etc/ssl/key.pem; 
+ 
+  # Rate limiting (Nginx layer, before app layer) 
+  limit_req_zone $binary_remote_addr zone=api:10m rate=60r/m; 
+  limit_req zone=api burst=20 nodelay; 
+ 
+  location /api/ { 
+    proxy_pass http://nestjs_app; 
+    proxy_set_header X-Real-IP $remote_addr; 
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
+    proxy_read_timeout 60s; 
+  } 
+} 
+ 
+Database Scaling 
+Primary PostgreSQL: all writes routed here 
+Read Replicas (2): feed queries, analytics, search routed to replicas via Prisma $extends 
+PgBouncer: connection pooling (transaction mode, max 100 DB connections) 
+Read replica lag monitoring: alert if >1s replica lag 
+ 
+18. Deployment Architecture (Docker) 
+ 
+docker-compose.prod.yml Services 
+Service 
+Configuration 
+nginx 
+Alpine, ports 80/443, mounts SSL certs, upstream config 
+app (x3) 
+Node 20 Alpine, replicated 3x, memory 512MB limit, CPU 0.5 
+postgres 
+PostgreSQL 15, volume-mounted data dir, pg_hba.conf 
+redis-cache 
+Redis 7 Alpine, maxmemory 4gb, allkeys-lru policy 
+redis-queue 
+Redis 7 Alpine, AOF persistence, BullMQ dedicated 
+video-worker 
+Node 20 + FFmpeg, dedicated container, CPU 2.0 limit 
+pgbouncer 
+PgBouncer latest, transaction mode, pool_size 25 
+prometheus 
+Metrics scraping from app + DB + Redis 
+grafana 
+Dashboard visualization, alert rules 
+ 
+Dockerfile (Multi-stage) 
+# Stage 1: Build 
+FROM node:20-alpine AS builder 
+WORKDIR /app 
+COPY package*.json ./   
+RUN npm ci --only=production 
+COPY . . 
+RUN npx prisma generate 
+RUN npm run build 
+ 
+# Stage 2: Production 
+FROM node:20-alpine AS production 
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001 
+WORKDIR /app 
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist 
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules 
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma 
+USER nestjs 
+EXPOSE 3000 
+CMD ["node", "dist/main.js"] 
+ 
+19. Monitoring & Logging Strategy 
+ 
+Observability Stack 
+Tool 
+Purpose 
+Prometheus + Grafana 
+Metrics collection, dashboards, alerting 
+Loki + Promtail 
+Centralized log aggregation 
+Jaeger (OpenTelemetry) 
+Distributed tracing (every request gets trace ID) 
+AWS CloudWatch 
+EC2/ECS resource metrics, billing alerts 
+Sentry 
+Error tracking with stack traces (NestJS + frontend) 
+BullMQ Bull-Board 
+Queue monitoring UI (failed jobs, queue depth) 
+pganalyze / pg_stat_statements 
+Slow query detection, query plan analysis 
+ 
+Key Metrics to Monitor 
+API: request rate, p50/p95/p99 latency, error rate (4xx/5xx) per endpoint 
+DB: query duration, connection pool usage, replication lag, index hit ratio 
+Redis: memory usage %, eviction rate, hit ratio, BullMQ queue depth per queue 
+Video: job queue depth, average processing time, failure rate 
+Business: new subscriptions/day, churn rate, MRR, DAU, video watch time 
+ 
+Structured Logging (Winston + JSON) 
+{ 
+  "timestamp": "2025-01-15T12:34:56.789Z", 
+  "level": "info", 
+  "service": "creator-platform", 
+  "correlationId": "req_abc123xyz", 
+  "userId": "usr_456def", 
+  "method": "GET", 
+  "path": "/api/v1/feed", 
+  "statusCode": 200, 
+  "responseTimeMs": 45, 
+  "message": "Request completed" 
+} 
+ 
+// Log levels: error > warn > info > http > debug 
+// Production: info and above only 
+// Never log passwords, tokens, or PII 
+ 
+20. Cost Optimization Recommendations 
+ 
+Area 
+Strategy 
+Estimated Saving 
+S3 Storage 
+S3 Intelligent-Tiering: auto-move cold HLS segments to IA after 30 days 
+30-50% storage cost 
+CloudFront 
+Start with PriceClass_100 (NA+EU), expand to All only if traffic justifies 
+40% CDN cost 
+EC2 / ECS 
+Use Spot Instances for video-worker containers (interruptible workload) 
+60-70% compute 
+RDS 
+Reserved instances (1-year) for PostgreSQL primary + replicas 
+30-40% DB cost 
+ElastiCache 
+Reserved nodes for Redis cluster 
+30% cache cost 
+S3 Raw Videos 
+Delete raw upload after successful HLS processing (S3 lifecycle rule) 
+100% of raw storage 
+Video Encoding 
+Batch encode during off-peak hours using Spot Instances 
+Variable 
+Bandwidth 
+Compress API responses (gzip), lazy-load images, use WebP for images 
+20-30% transfer 
+ 
+Monthly Cost Estimate (10K MAU baseline) 
+Service 
+Estimated Monthly Cost 
+EC2 (2 t3.medium app servers) 
+~$60 
+EC2 (video worker, spot t3.xlarge) 
+~$30 
+RDS PostgreSQL (db.t3.medium) 
+~$60 
+ElastiCache Redis (cache.t3.medium x2) 
+~$80 
+S3 Storage (1TB HLS content) 
+~$23 
+CloudFront (5TB transfer) 
+~$45 
+SES Email (50K emails/mo) 
+~$5 
+Total Estimate 
+~$300/month at 10K MAU 
+ 
+21. Future Microservices Migration Path 
+ 
+The Modular Monolith is designed with clean boundaries so each module can be extracted as a standalone microservice without changing its public interface. Migration is incremental — "Strangler Fig" pattern. 
+ 
+Extraction Order (by traffic + isolation value) 
+VideoService → extract first (CPU-intensive, independent scaling needed) 
+NotificationService → high volume, different scaling needs, easy to decouple 
+PaymentsService → regulatory isolation, PCI DSS scoping benefits 
+FeedService → read-heavy, can use CQRS + separate read model 
+AuthService → security boundary, can add OAuth2 server capabilities 
+Remaining modules → extract only if clear need emerges 
+ 
+Pre-requisites for Migration (Already Built In) 
+No direct DB queries across module boundaries — each module owns its tables 
+Cross-module calls via EventEmitter2 (easy to replace with Kafka/NATS/RabbitMQ) 
+Shared Redis and Queue are already abstracted behind providers 
+Each module has its own DTOs — no shared entity leakage 
+API gateway can be added in front (Kong, AWS API Gateway) without app changes 
+ 
+Communication Pattern After Extraction 
+Synchronous (request/response): 
+  Monolith ──HTTP──► Auth Service  (JWT validation) 
+  Monolith ──HTTP──► Payment Service (create checkout) 
+ 
+Asynchronous (event-driven): 
+  Posts Module ──Kafka──► Feed Service  (post.published event) 
+  Posts Module ──Kafka──► Notification Service 
+  Payment Service ──Kafka──► Subscription Service (subscription.activated) 
+  Payment Service ──Kafka──► Analytics Service 
+ 
+Kafka topics: 
+  platform.posts.published 
+  platform.subscriptions.activated 
+  platform.subscriptions.cancelled 
+  platform.payments.succeeded 
+  platform.users.registered 
+ 
+Service Mesh (Phase 2) 
+Istio or Linkerd for mutual TLS between services 
+Circuit breaker pattern via Istio or opossum library 
+Distributed tracing via OpenTelemetry (already instrumented in monolith) 
+API Gateway (Kong): rate limiting, auth, routing, observability 
+ 
+22. Tradeoffs & Design Decisions 
+ 
+Decision 
+Chosen Approach 
+Tradeoff / Alternative 
+Architecture style 
+Modular Monolith 
+Microservices: faster iteration, but ops complexity at early stage 
+Primary key type 
+CUID2 (string) 
+UUID: slightly larger index; auto-increment: easier debugging but leaks count 
+Like counting 
+Write-behind via Redis + BullMQ 
+Direct DB write: simpler but high-traffic bottleneck 
+Feed strategy 
+Push for normal, pull for high-follower 
+Pure push: Redis memory grows; pure pull: high latency 
+Video encoding 
+Server-side FFmpeg 
+AWS MediaConvert: managed, but $0.0075/min; FFmpeg is free but requires compute 
+Auth tokens 
+Short-lived JWT (15min) + rotating refresh 
+Long-lived JWT: simpler but no revocation; session cookies: CSRF surface 
+Money storage 
+Integer cents in Postgres 
+Numeric(10,2): safe but slower; float: never, precision loss 
+ORM 
+Prisma (type-safe) 
+TypeORM: more features; raw SQL: fastest but unsafe; Drizzle: newer, lighter 
+Pagination 
+Cursor-based for feeds 
+Offset-based: simple but poor at scale (>10K rows becomes slow) 
+File uploads 
+Direct to S3 presigned URL 
+Via server: simpler but server becomes bottleneck for large files 
+ 
+Vibe Coding Suitability Assessment 
+This architecture is designed to be fully implementable via AI-assisted (vibe) coding. Here is an honest assessment: 
+ 
+What Works Well with Vibe Coding 
+What Requires Careful Human Review 
+NestJS module scaffolding (generate commands) 
+Prisma migrations — must review before applying to prod DB 
+Prisma schema and CRUD services 
+Stripe webhook logic — money is involved, test thoroughly 
+Redis caching helper functions 
+FFmpeg command correctness — test with real video files 
+BullMQ job definitions 
+CloudFront signed URL generation — security-critical 
+DTO classes with class-validator 
+JWT strategy edge cases (token refresh race conditions) 
+Nginx config from templates 
+SubscriptionGuard — access control is business-critical 
+Docker Compose setup 
+Database indexes — wrong indexes hurt more than no indexes 
+ 
+Recommended Implementation Order 
+Auth module (register, login, JWT, refresh) — foundation for everything 
+Users + CreatorProfile modules (CRUD) 
+Posts module (CRUD, visibility) 
+Media module (S3 presigned URL, CloudFront signed URL) 
+Video module (BullMQ + FFmpeg pipeline) 
+Subscriptions module (Stripe checkout + webhook) 
+Feed module (push feed + Redis sorted sets) 
+Interactions module (likes, comments) 
+Notifications module (SSE + email) 
+Payouts module (Stripe Connect) 
+Admin module + analytics 
+Production hardening (monitoring, rate limiting, security audit) 
+ 
+ 
+Architecture Document v1.0 — Production Ready Blueprint 
+Designed for NestJS + PostgreSQL + Redis + AWS S3 + CloudFront + BullMQ + FFmpeg 

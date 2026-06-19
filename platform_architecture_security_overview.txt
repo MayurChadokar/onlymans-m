@@ -1,0 +1,28 @@
+﻿
+Platform Architecture &amp; Security Overview
+Signed URL &amp; Media Protection
+We use AWS S3 buckets with signed URLs to keep creator media files private and secure. Users receive temporary access only after successful subscription validation. This architecture helps prevent piracy, unauthorized sharing, and direct access to media files.
+Tech Used:
+AWS S3
+AWS CloudFront
+Signed URLs
+HLS Video Streaming
+Transcoding Queues &amp; Workers
+We use a dedicated background processing system for uploaded media. Videos are transcoded into optimized streaming formats and multiple resolutions to ensure smooth playback across different devices and network conditions.
+Tech Used:
+FFmpeg
+Redis
+Node.js Worker Processes
+Webhook Retry Handling
+Webhooks are securely verified, logged, and automatically retried in case of failures. This ensures reliable subscription activation and payment processing while maintaining system consistency.
+Tech Used:
+Stripe Webhooks
+Redis Queue System
+Rate Limiting &amp; Security
+The platform includes multiple security layers to protect APIs and user accounts from spam, bots, brute-force attacks, and abuse.
+Tech Used:
+Express Rate Limiter
+Helmet.js
+Redis-based Throttling
+JWT Authentication
+CAPTCHA Verification

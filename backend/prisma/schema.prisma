@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  CREATOR
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PostVisibility {
+  PUBLIC
+  PREMIUM
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum ReportType {
+  SPAM
+  CONTENT_VIOLATION
+  HARASSMENT
+  IMPERSONATION
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  username     String         @unique
+  passwordHash String
+  role         Role           @default(USER)
+  isVerified   Boolean        @default(false)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  tokens          RefreshToken[]
+  creatorProfile  CreatorProfile?
+  subscriptions   Subscription[] @relation("Subscriber")
+  subscribers     Subscription[] @relation("Creator")
+  posts           Post[]         @relation("CreatorPosts")
+  comments        Comment[]      @relation("UserComments")
+  likes           Like[]         @relation("UserLikes")
+  bookmarks       Bookmark[]     @relation("UserBookmarks")
+  reportsReceived Report[]       @relation("ReportedUser")
+  reportsFiled    Report[]       @relation("ReportedBy")
+  tiers           SubscriptionTier[] @relation("CreatorTiers")
+}
+
+model CreatorProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio         String?
+  price       Float    @default(0.0)
+  avatarUrl   String?
+  coverUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SubscriptionTier {
+  id        String   @id @default(uuid())
+  creatorId String
+  creator   User     @relation("CreatorTiers", fields: [creatorId], references: [id], onDelete: Cascade)
+  name      String
+  price     Float
+  benefits  String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subscription {
+  id           String   @id @default(uuid())
+  subscriberId String
+  creatorId    String
+  
+  subscriber   User     @relation("Subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
+  creator      User     @relation("Creator", fields: [creatorId], references: [id], onDelete: Cascade)
+  
+  status       SubscriptionStatus @default(ACTIVE)
+  startDate    DateTime @default(now())
+  endDate      DateTime
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([subscriberId, creatorId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Post {
+  id              String         @id @default(uuid())
+  creatorId       String
+  creator         User           @relation("CreatorPosts", fields: [creatorId], references: [id], onDelete: Cascade)
+  content         String?        // Text caption
+  visibility      PostVisibility @default(PREMIUM)
+  media           Media[]
+  commentsEnabled Boolean        @default(true)
+  comments        Comment[]
+  likes           Like[]
+  bookmarks       Bookmark[]     @relation("PostBookmarks")
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Media {
+  id        String    @id @default(uuid())
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type      MediaType
+  url       String    
+  
+  createdAt DateTime  @default(now())
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserComments", fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserLikes", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserBookmarks", fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation("PostBookmarks", fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model Report {
+  id             String       @id @default(uuid())
+  reportedUserId String
+  reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reportedById   String
+  reportedBy     User         @relation("ReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  type           ReportType
+  reason         String
+  status         ReportStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([reportedUserId])
+  @@index([status])
+}
