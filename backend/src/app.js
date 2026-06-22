@@ -37,6 +37,9 @@ if (config.env === 'production') {
 // v1 api routes
 app.use('/api/v1', routes);
 
+// Silence browser-generated requests that aren't part of the API
+app.get('/firebase-messaging-sw.js', (_req, res) => res.status(404).end());
+
 // send back a 404 error for any unknown api request
 app.use((req, res, next) => {
   const error = new Error(`Not found: ${req.method} ${req.originalUrl}`);

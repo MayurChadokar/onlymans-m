@@ -146,7 +146,7 @@ function App() {
 
         {/* Admin Routes */}
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin" element={<RoleRoute allow={['ADMIN']} fallback="/admin-login"><AdminPanel /></RoleRoute>} />
 
         {/* Legacy route redirects for backward compatibility */}
         <Route path="/dashboard" element={<Navigate to="/user/dashboard" replace />} />
