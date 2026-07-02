@@ -8,3 +8,4 @@ coverage/
 .nyc_output/
 logs/
 *.log
+backend/appzeto-6b06a-firebase-adminsdk-fbsvc-930c80418b.json
