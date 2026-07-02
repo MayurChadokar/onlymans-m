@@ -3,20 +3,33 @@ const { RedisStore } = require('rate-limit-redis');
 const config = require('../config/env');
 const redisClient = require('../config/redis');
 
+// Helper to send command to Redis only if it's connected/ready
+// This avoids waiting for a 3-second commandTimeout when Redis is down/unreachable
+const sendRedisCommand = async (...args) => {
+  if (redisClient.status !== 'ready') {
+    throw new Error('Redis connection is not ready');
+  }
+  return redisClient.call(...args);
+};
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // Limit each IP to 20 requests per `window`
   skipSuccessfulRequests: true,
+  passOnStoreError: true, // Allow requests through if Redis fails
+  validate: { doubleCount: false },
   store: new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
+    sendCommand: sendRedisCommand,
   }),
 });
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
   max: 100,
+  passOnStoreError: true, // Allow requests through if Redis fails
+  validate: { doubleCount: false },
   store: new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
+    sendCommand: sendRedisCommand,
   }),
 });
 
@@ -29,8 +42,10 @@ const adminLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  passOnStoreError: true, // Allow requests through if Redis fails
+  validate: { doubleCount: false },
   store: new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
+    sendCommand: sendRedisCommand,
   }),
 });
 
@@ -39,3 +54,4 @@ module.exports = {
   apiLimiter,
   adminLimiter,
 };
+
