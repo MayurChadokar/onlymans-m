@@ -75,7 +75,7 @@ const AdminPanel = () => {
   // Users
   const [users, setUsers] = useState([]);
   const [usersPagination, setUsersPagination] = useState({ page: 1, totalPages: 1, total: 0 });
-  const [userFilter, setUserFilter] = useState('ALL');
+  const [userFilter] = useState('USER');
 
   // Posts
   const [posts, setPosts] = useState([]);
@@ -209,10 +209,6 @@ const AdminPanel = () => {
     if (activeTab === 'reports') fetchReports(1, reportFilter);
   }, [activeTab]);
 
-  // Re-fetch users when filter changes
-  useEffect(() => {
-    if (activeTab === 'users') fetchUsers(1, userFilter);
-  }, [userFilter]);
 
   // Re-fetch reports when filter changes
   useEffect(() => {
@@ -397,40 +393,33 @@ const AdminPanel = () => {
   const renderUsers = () => (
     <div className="admin-panel-section">
       <div className="section-header">
-        <h2>User & Creator Management</h2>
-        <div className="segmented-control">
-          {['ALL', 'USER', 'CREATOR'].map(f => (
-            <button key={f} className={`segmented-btn ${userFilter === f ? 'active' : ''}`} onClick={() => setUserFilter(f)}>
-              {f === 'ALL' ? 'All' : f === 'USER' ? 'Users' : 'Creators'}
-            </button>
-          ))}
-        </div>
+        <h2>User Management</h2>
+        <span style={{ fontSize: '13px', color: '#718096', background: '#DBEAFE', padding: '6px 14px', borderRadius: '20px', fontWeight: 600 }}>
+          {usersPagination.total} Users
+        </span>
       </div>
       <table className="data-table">
         <thead>
           <tr>
             <th>Account</th>
             <th>Status</th>
-            {userFilter !== 'USER' && <th>Verification</th>}
+            <th>Joined</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {sectionLoading ? (
-            <LoadingRow cols={userFilter !== 'USER' ? 4 : 3} />
+            <LoadingRow cols={4} />
           ) : users.length === 0 ? (
-            <EmptyRow cols={userFilter !== 'USER' ? 4 : 3} message="No users found." />
+            <EmptyRow cols={4} message="No users found." />
           ) : users.map(user => (
             <tr key={user.id}>
               <td>
                 <div className="user-cell">
-                  <img src={user.avatarUrl || user.creatorProfile?.avatarUrl || AVATAR_PLACEHOLDER} alt={user.username} />
+                  <img loading="lazy" decoding="async" src={user.avatarUrl || AVATAR_PLACEHOLDER} alt={user.username} />
                   <div className="user-cell-info">
-                    <h4>
-                      @{user.username}
-                      {user.isVerified && <BadgeCheck size={14} color="#00B4D8" />}
-                    </h4>
-                    <span>{user.email} • {user.role}</span>
+                    <h4>@{user.username}</h4>
+                    <span>{user.email}</span>
                   </div>
                 </div>
               </td>
@@ -439,20 +428,11 @@ const AdminPanel = () => {
                   {user.isActive ? 'ACTIVE' : 'BLOCKED'}
                 </span>
               </td>
-              {userFilter !== 'USER' && (
-                <td>
-                  {user.role === 'CREATOR' ? (
-                    <ToggleSwitch
-                      isOn={user.isVerified}
-                      onToggle={() => toggleCreatorVerification(user.id, user.isVerified)}
-                      labelOn="Verified"
-                      labelOff="Unverified"
-                    />
-                  ) : (
-                    <span style={{ color: 'var(--text-secondary)' }}>—</span>
-                  )}
-                </td>
-              )}
+              <td>
+                <span style={{ fontSize: '13px', color: '#718096' }}>
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </span>
+              </td>
               <td>
                 <div className="action-buttons">
                   <button
@@ -470,7 +450,7 @@ const AdminPanel = () => {
           ))}
         </tbody>
       </table>
-      <Pagination pagination={usersPagination} onPageChange={(p) => fetchUsers(p, userFilter)} />
+      <Pagination pagination={usersPagination} onPageChange={(p) => fetchUsers(p, 'USER')} />
     </div>
   );
 
@@ -492,7 +472,7 @@ const AdminPanel = () => {
             return (
               <div className={`admin-post-card ${post.visibility !== 'PUBLIC' ? 'hidden-post' : ''}`} key={post.id}>
                 <div className="admin-post-header">
-                  <img src={post.creator?.avatarUrl || AVATAR_PLACEHOLDER} alt={post.creator?.username} />
+                  <img loading="lazy" decoding="async" src={post.creator?.avatarUrl || AVATAR_PLACEHOLDER} alt={post.creator?.username} />
                   <div>
                     <h4>@{post.creator?.username}</h4>
                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
@@ -505,7 +485,7 @@ const AdminPanel = () => {
                 </div>
 
                 <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setSelectedPost(post)}>
-                  <img src={mediaUrl} alt="Post media" className="admin-post-media" onError={e => { e.target.src = `https://picsum.photos/seed/${post.id}/400/300`; }} />
+                  <img loading="lazy" decoding="async" src={mediaUrl} alt="Post media" className="admin-post-media" onError={e => { e.target.src = `https://picsum.photos/seed/${post.id}/400/300`; }} />
                   {isVideo && (
                     <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '12px', pointerEvents: 'none' }}>
                       <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M8 5v14l11-7z" /></svg>
@@ -567,7 +547,7 @@ const AdminPanel = () => {
             <tr key={comment.id}>
               <td>
                 <div className="user-cell">
-                  <img src={comment.user?.avatarUrl || AVATAR_PLACEHOLDER} alt={comment.user?.username} />
+                  <img loading="lazy" decoding="async" src={comment.user?.avatarUrl || AVATAR_PLACEHOLDER} alt={comment.user?.username} />
                   <div className="user-cell-info">
                     <h4>@{comment.user?.username}</h4>
                     <span>
@@ -646,7 +626,7 @@ const AdminPanel = () => {
               <div style={{ padding: '0 16px 16px', marginTop: '-28px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ position: 'relative' }}>
-                    <img src={creator.profile?.avatarUrl || AVATAR_PLACEHOLDER} alt={creator.username} style={{ width: '56px', height: '56px', borderRadius: '50%', border: '3px solid #FFFFFF', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={creator.profile?.avatarUrl || AVATAR_PLACEHOLDER} alt={creator.username} style={{ width: '56px', height: '56px', borderRadius: '50%', border: '3px solid #FFFFFF', objectFit: 'cover' }} />
                     {creator.isVerified && <BadgeCheck size={16} color="#2563EB" style={{ position: 'absolute', bottom: 0, right: 0, background: 'white', borderRadius: '50%' }} />}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FFFBEB', border: '1px solid #FDE68A', padding: '5px 12px', borderRadius: '20px' }}>
@@ -718,7 +698,7 @@ const AdminPanel = () => {
             <div style={{ padding: '0 24px 24px', marginTop: '-32px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <div style={{ position: 'relative' }}>
-                  <img src={selectedCreator.profile?.avatarUrl || AVATAR_PLACEHOLDER} alt={selectedCreator.username} style={{ width: '64px', height: '64px', borderRadius: '50%', border: '4px solid white', objectFit: 'cover' }} />
+                  <img loading="lazy" decoding="async" src={selectedCreator.profile?.avatarUrl || AVATAR_PLACEHOLDER} alt={selectedCreator.username} style={{ width: '64px', height: '64px', borderRadius: '50%', border: '4px solid white', objectFit: 'cover' }} />
                   {selectedCreator.isVerified && <BadgeCheck size={18} color="#2563EB" style={{ position: 'absolute', bottom: 0, right: 0, background: 'white', borderRadius: '50%' }} />}
                 </div>
                 <span style={{ background: '#F0F4FF', color: '#4F46E5', padding: '6px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 700 }}>
@@ -799,7 +779,7 @@ const AdminPanel = () => {
             <tr key={report.id} style={{ opacity: report.status !== 'PENDING' ? 0.6 : 1 }}>
               <td>
                 <div className="user-cell">
-                  <img src={report.reportedUser?.avatarUrl || AVATAR_PLACEHOLDER} alt={report.reportedUser?.username} />
+                  <img loading="lazy" decoding="async" src={report.reportedUser?.avatarUrl || AVATAR_PLACEHOLDER} alt={report.reportedUser?.username} />
                   <div className="user-cell-info">
                     <h4>@{report.reportedUser?.username}</h4>
                     <span>
@@ -861,8 +841,7 @@ const AdminPanel = () => {
       <div className="modal-overlay" onClick={() => setSelectedPost(null)}>
         <div className="modal-content" onClick={e => e.stopPropagation()}>
           <div className="modal-media-section">
-            <img
-              src={selectedPost.media?.[0]?.url || `https://picsum.photos/seed/${selectedPost.id}/400/300`}
+            <img loading="lazy" decoding="async"               src={selectedPost.media?.[0]?.url || `https://picsum.photos/seed/${selectedPost.id}/400/300`}
               alt="Post media"
               onError={e => { e.target.src = `https://picsum.photos/seed/${selectedPost.id}/400/300`; }}
             />
@@ -870,7 +849,7 @@ const AdminPanel = () => {
           <div className="modal-info-section">
             <div className="modal-header">
               <div className="user-cell">
-                <img src={selectedPost.creator?.avatarUrl || AVATAR_PLACEHOLDER} alt={selectedPost.creator?.username} />
+                <img loading="lazy" decoding="async" src={selectedPost.creator?.avatarUrl || AVATAR_PLACEHOLDER} alt={selectedPost.creator?.username} />
                 <div className="user-cell-info">
                   <h4>@{selectedPost.creator?.username}</h4>
                   <span>{new Date(selectedPost.createdAt).toLocaleDateString()}</span>
@@ -890,7 +869,7 @@ const AdminPanel = () => {
                   <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>No comments yet.</p>
                 ) : postComments.map(c => (
                   <div className="modal-comment" key={c.id}>
-                    <img src={c.user?.avatarUrl || AVATAR_PLACEHOLDER} alt={c.user?.username} />
+                    <img loading="lazy" decoding="async" src={c.user?.avatarUrl || AVATAR_PLACEHOLDER} alt={c.user?.username} />
                     <div className="modal-comment-content">
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <h5>@{c.user?.username}</h5>
@@ -947,7 +926,7 @@ const AdminPanel = () => {
 
         <div className="admin-sidebar-footer">
           <div className="admin-footer-profile">
-            <img src={currentUser?.avatarUrl || AVATAR_PLACEHOLDER} alt="Admin avatar" className="footer-avatar" />
+            <img loading="lazy" decoding="async" src={currentUser?.avatarUrl || AVATAR_PLACEHOLDER} alt="Admin avatar" className="footer-avatar" />
             <div className="footer-profile-info">
               <span className="footer-profile-name">{currentUser?.username || 'Admin'}</span>
               <span className="footer-profile-role">Root Access</span>
@@ -966,7 +945,7 @@ const AdminPanel = () => {
           <h1>{tabTitle[activeTab]}</h1>
           <div className="admin-user-profile">
             <span style={{ fontWeight: 600 }}>{currentUser?.username || 'Admin'}</span>
-            <img src={currentUser?.avatarUrl || AVATAR_PLACEHOLDER} alt="Admin" />
+            <img loading="lazy" decoding="async" src={currentUser?.avatarUrl || AVATAR_PLACEHOLDER} alt="Admin" />
           </div>
         </header>
 

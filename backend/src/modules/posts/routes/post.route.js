@@ -14,6 +14,9 @@ router.use(authenticate);
 // Feed retrieval - Any authenticated user can view a feed (but services will censor PREMIUM content)
 router.get('/creator/:creatorId', validate(postValidator.getCreatorFeed), postController.getCreatorFeed);
 
+// Get single post
+router.get('/:postId', postController.getPostDetails);
+
 // Creator specific endpoints
 router.post('/', requireRole(roles.CREATOR), validate(postValidator.createPost), postController.createPost);
 router.delete('/:postId', requireRole(roles.CREATOR), validate(postValidator.deletePost), postController.deletePost);

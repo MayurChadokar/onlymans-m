@@ -61,7 +61,7 @@ const VideoPlayer = () => {
           Back
         </button>
         <div className="creator-info">
-          <img src="https://i.pravatar.cc/150?img=53" alt="Creator" className="creator-avatar" />
+          <img loading="lazy" decoding="async" src="https://i.pravatar.cc/150?img=53" alt="Creator" className="creator-avatar" />
           <div className="creator-details">
             <h3>Julian.X</h3>
             <span>Exclusive Content</span>

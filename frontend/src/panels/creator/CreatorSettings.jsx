@@ -9,6 +9,7 @@ import {
   getCurrentUser,
   getRefreshToken,
 } from '../../utils/auth';
+import CreatorNavbar from '../../components/CreatorNavbar';
 
 const CreatorSettings = () => {
   const navigate = useNavigate();
@@ -154,69 +155,7 @@ const CreatorSettings = () => {
   return (
     <div className="creator-layout">
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      <nav className="studio-top-nav">
-        <div className="nav-left" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link to="/creator/studio" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-            <span className="creator-badge" style={{ marginLeft: '4px' }}>CREATOR</span>
-          </Link>
-        </div>
-        <div className="nav-right">
-          <button
-            className="icon-btn"
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '50%' }}
-            title="Toggle Theme"
-          >
-            {theme === 'dark' ? (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-
-          <div className="user-avatar" style={{ position: 'relative' }}>
-            <img
-              src={avatarUrl || user?.avatar || 'https://i.pravatar.cc/150?img=11'}
-              alt="Profile"
-              onClick={() => setShowDropdown(!showDropdown)}
-            />
-            {showDropdown && (
-              <div
-                style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}
-                onClick={() => setShowDropdown(false)}
-              >
-                <Link to="/creator/settings" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: '600' }}>
-                  ⚙️ Account Settings
-                </Link>
-                <Link to="/creator/studio" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}>
-                  🎬 Creator Studio
-                </Link>
-                {user?.id && (
-                  <Link to={`/creator-profile/${user.id}`} style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}>
-                    👤 My Creator Page
-                  </Link>
-                )}
-                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                <button
-                  onClick={handleLogout}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                >
-                  🚪 Log Out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+      <CreatorNavbar />
 
       {/* ── Toast ──────────────────────────────────────────────────────── */}
       {toast && (
@@ -287,7 +226,7 @@ const CreatorSettings = () => {
                 <input type="file" accept="image/*" ref={coverInputRef} style={{ display: 'none' }} onChange={(e) => handleImagePreview(e, setCoverUrl)} />
                 <div style={{ position: 'relative', width: '100%', height: '130px', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px', background: 'rgba(255,255,255,0.04)', border: '1px dashed var(--border-color)' }}>
                   {coverUrl ? (
-                    <img src={coverUrl} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={coverUrl} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No cover photo set</div>
                   )}
@@ -304,8 +243,7 @@ const CreatorSettings = () => {
                 <input type="file" accept="image/*" ref={avatarInputRef} style={{ display: 'none' }} onChange={(e) => handleImagePreview(e, setAvatarUrl)} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <img
-                      src={avatarUrl || 'https://i.pravatar.cc/150?img=11'}
+                    <img loading="lazy" decoding="async"                       src={avatarUrl || 'https://i.pravatar.cc/150?img=11'}
                       alt="Avatar"
                       style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--border-color)' }}
                     />

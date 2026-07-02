@@ -211,6 +211,12 @@ const deleteTier = async (tierId) => {
   return prisma.subscriptionTier.delete({ where: { id: tierId } });
 };
 
+const getUserById = async (id) => {
+  return prisma.user.findUnique({
+    where: { id }
+  });
+};
+
 module.exports = {
   createProfile,
   updateProfile,
@@ -227,4 +233,5 @@ module.exports = {
   getTiersByCreatorId,
   findTierById,
   deleteTier,
+  getUserById,
 };

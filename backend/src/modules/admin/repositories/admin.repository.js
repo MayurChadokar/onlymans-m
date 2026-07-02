@@ -26,12 +26,12 @@ const getDashboardStats = async () => {
     prisma.user.count({ where: { isActive: false } }),
   ]);
 
-  // Monthly revenue calculation (sum of active subscription creator prices)
+  // Monthly revenue: sum only the price field, avoid loading full User/CreatorProfile rows
   const revenueResult = await prisma.subscription.findMany({
     where: { status: 'ACTIVE' },
-    include: {
+    select: {
       creator: {
-        include: { creatorProfile: true },
+        select: { creatorProfile: { select: { price: true } } },
       },
     },
   });
@@ -337,7 +337,7 @@ const getCreators = async ({ page = 1, limit = 20, search, verified }) => {
   const [creators, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      skip,
+      skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {

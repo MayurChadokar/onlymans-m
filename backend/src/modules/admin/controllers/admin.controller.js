@@ -6,6 +6,31 @@ const {
   AdminCommentDTO,
   AdminReportDTO,
 } = require('../dto/admin.dto');
+const authService = require('../../auth/services/auth.service');
+const tokenService = require('../../auth/services/token.service');
+const tokenRepository = require('../../auth/repositories/token.repository');
+const UserDTO = require('../../auth/dto/user.dto');
+
+// ==================== AUTH ====================
+
+const adminLogin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const user = await authService.loginUser(email, password);
+
+    if (user.role !== 'ADMIN') {
+      const err = new Error('Access denied. Admin credentials required.');
+      err.statusCode = 403;
+      return next(err);
+    }
+
+    const tokens = await tokenService.generateAuthTokens(user);
+    res.json({ user: new UserDTO(user), tokens });
+  } catch (error) {
+    error.statusCode = 401;
+    next(error);
+  }
+};
 
 // ==================== DASHBOARD ====================
 
@@ -60,6 +85,9 @@ const updateUserStatus = async (req, res, next) => {
     const { userId } = req.params;
     const { isActive } = req.body;
     const user = await adminRepo.updateUserById(userId, { isActive });
+    if (!isActive) {
+      await tokenRepository.deleteAllUserRefreshTokens(userId);
+    }
     res.json({ user: new AdminUserDTO(user) });
   } catch (error) {
     next(error);
@@ -156,7 +184,19 @@ const updatePostVisibility = async (req, res, next) => {
 const deletePost = async (req, res, next) => {
   try {
     const { postId } = req.params;
+    const post = await adminRepo.getPostById(postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    const creatorId = post.creator.id;
     await adminRepo.deletePostById(postId);
+    
+    // Invalidate caches
+    const cache = require('../../../cache/cache.service');
+    cache.delPattern(`feed:creator:*:${creatorId}*`).catch(err => console.error(err));
+    cache.delPattern(`feed:random:*`).catch(err => console.error(err));
+    cache.del(`creator:dashboard:${creatorId}`).catch(err => console.error(err));
+
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
     next(error);
@@ -195,7 +235,9 @@ const blockCommentAuthor = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
-    const user = await adminRepo.updateUserById(comment.user.id, { isActive: false });
+    const authorId = comment.user.id;
+    const user = await adminRepo.updateUserById(authorId, { isActive: false });
+    await tokenRepository.deleteAllUserRefreshTokens(authorId);
     res.json({ message: 'Comment author blocked', user: new AdminUserDTO(user) });
   } catch (error) {
     next(error);
@@ -235,10 +277,12 @@ const blockAndResolveReport = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
+    const reportedUserId = report.reportedUser.id;
     // Block the reported user and resolve the report in parallel
     const [updatedReport] = await Promise.all([
       adminRepo.updateReportById(reportId, { status: 'RESOLVED' }),
-      adminRepo.updateUserById(report.reportedUser.id, { isActive: false }),
+      adminRepo.updateUserById(reportedUserId, { isActive: false }),
+      tokenRepository.deleteAllUserRefreshTokens(reportedUserId),
     ]);
     res.json({ message: 'User blocked and report resolved', report: new AdminReportDTO(updatedReport) });
   } catch (error) {
@@ -247,6 +291,7 @@ const blockAndResolveReport = async (req, res, next) => {
 };
 
 module.exports = {
+  adminLogin,
   getDashboard,
   listUsers,
   getUserById,

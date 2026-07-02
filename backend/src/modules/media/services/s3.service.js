@@ -42,8 +42,12 @@ const generateUploadUrl = async (userId, contentType) => {
  */
 const generateViewUrl = async (key) => {
   if (!key) return null;
-  // If the key is already a full http URL (e.g. legacy data), return as is
+  // If the key is already a full http URL (e.g. Cloudinary), optimize and return
   if (key.startsWith('http://') || key.startsWith('https://')) {
+    // Inject Cloudinary auto-optimization flags if it's a Cloudinary URL
+    if (key.includes('res.cloudinary.com') && !key.includes('f_auto') && !key.includes('q_auto')) {
+      return key.replace('/upload/', '/upload/f_auto,q_auto/');
+    }
     return key;
   }
 

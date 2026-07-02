@@ -4,6 +4,7 @@ import './Dashboard.css';
 import Logo from '../../components/Logo';
 import { apiRequest } from '../../utils/api';
 import { clearAuthSession, getAccessToken, getCurrentUser, getRefreshToken } from '../../utils/auth';
+import UserNavbar from '../../components/UserNavbar';
 
 const Subscriptions = () => {
   const navigate = useNavigate();
@@ -44,41 +45,7 @@ const Subscriptions = () => {
 
   return (
     <div className="dashboard-layout">
-      <nav className="top-nav">
-        <div className="nav-left">
-          <Link to="/user/dashboard" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-          </Link>
-        </div>
-        <div className="nav-center">
-          <div className="search-bar">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" placeholder="Search creators, hashtags..." />
-          </div>
-        </div>
-        <div className="nav-right">
-          {user && (
-            <div className="user-avatar" style={{ position: 'relative' }}>
-              <img src={user?.avatar || 'https://i.pravatar.cc/150?img=11'} alt="Profile" onClick={() => setShowDropdown(!showDropdown)} style={{ cursor: 'pointer' }} />
-              {showDropdown && (
-                <div style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '160px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}>
-                  <Link to="/user/profile" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-primary)', textDecoration: 'none', fontSize: '0.9rem' }}>View Profile</Link>
-                  {user?.role === 'CREATOR' && (
-                    <Link to="/creator/studio" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-primary)', textDecoration: 'none', fontSize: '0.9rem' }}>Creator Studio</Link>
-                  )}
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                  <button
-                    onClick={handleLogout}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                  >
-                    Log Out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
+      <UserNavbar />
 
       <div className="dashboard-content">
         <aside className="left-sidebar">
@@ -117,7 +84,7 @@ const Subscriptions = () => {
             {subscriptions.map((sub) => (
               <div key={sub.id} className="post-card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Link to="/user/explore" style={{ display: 'flex', alignItems: 'center', gap: '16px', textDecoration: 'none', color: 'inherit' }}>
-                  <img src={`https://i.pravatar.cc/150?u=${sub.creatorUsername}`} alt={sub.creatorUsername} style={{ width: '60px', height: '60px', borderRadius: '50%' }} />
+                  <img loading="lazy" decoding="async" src={`https://i.pravatar.cc/150?u=${sub.creatorUsername}`} alt={sub.creatorUsername} style={{ width: '60px', height: '60px', borderRadius: '50%' }} />
                   <div>
                     <h4 style={{ fontSize: '1.1rem', marginBottom: '4px', color: 'var(--text-primary)' }}>{sub.creatorUsername}</h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>@{sub.creatorUsername}</p>

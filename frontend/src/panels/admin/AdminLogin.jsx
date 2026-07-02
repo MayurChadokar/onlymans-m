@@ -17,14 +17,10 @@ const AdminLogin = () => {
     setError('');
     setLoading(true);
     try {
-      const response = await apiRequest('/auth/login', {
+      const response = await apiRequest('/admin/login', {
         method: 'POST',
         body: { email, password },
       });
-      if (response.user?.role !== 'ADMIN') {
-        setError('Access denied. Admin credentials required.');
-        return;
-      }
       setAuthSession(response);
       navigate('/admin');
     } catch (err) {

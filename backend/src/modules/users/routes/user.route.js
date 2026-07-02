@@ -16,8 +16,10 @@ router.patch('/profile', validate(userValidator.updateProfile), userController.u
 router.put('/avatar', upload.single('avatar'), userController.updateAvatar);
 router.delete('/profile', userController.deactivateAccount);
 router.get('/subscriptions', userController.getMySubscriptions);
+router.post('/subscriptions', userController.subscribeToCreator);
 router.post('/subscriptions/:subscriptionId/cancel', userController.cancelSubscription);
 router.get('/favorites', userController.getFavorites);
+router.post('/:userId/report', validate(userValidator.reportUser), userController.reportUser);
 router.get('/payment-methods', userController.getPaymentMethods);
 router.post('/payment-methods', userController.addPaymentMethod);
 router.delete('/payment-methods/:methodId', userController.removePaymentMethod);

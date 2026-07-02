@@ -24,7 +24,22 @@ const validate = (schema) => (req, res, next) => {
     return next(err);
   }
 
-  Object.assign(req, value);
+  // Express v5 defines req.query as a configurable getter — override it with a
+  // plain writable property so Joi defaults are visible to route handlers.
+  if (value.query !== undefined) {
+    Object.defineProperty(req, 'query', {
+      value: value.query,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  if (value.params !== undefined) {
+    Object.assign(req.params, value.params);
+  }
+  if (value.body !== undefined) {
+    req.body = value.body;
+  }
   return next();
 };
 

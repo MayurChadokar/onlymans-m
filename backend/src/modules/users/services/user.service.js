@@ -71,12 +71,15 @@ const cancelUserSubscription = async (userId, subscriptionId) => {
 
 const getUserDashboard = async (userId) => {
   return cache.wrap(`user:dashboard:${userId}`, DASHBOARD_TTL, async () => {
-    const user = await userRepository.findUserById(userId);
+    // Run independent queries in parallel — user info and subscriptions don't depend on each other
+    const [user, subscriptions] = await Promise.all([
+      userRepository.findUserById(userId),
+      userRepository.findUserSubscriptions(userId),
+    ]);
+
     if (!user) {
       throw new Error('User not found');
     }
-
-    const subscriptions = await userRepository.findUserSubscriptions(userId);
 
     const activeSubscriptions = subscriptions.map(sub => ({
       subscriptionId: sub.id,
@@ -97,8 +100,11 @@ const getUserDashboard = async (userId) => {
 
     const subscribedCreatorIds = activeSubscriptions.map(sub => sub.creator.id);
 
-    const recentPosts = await userRepository.findRecentSubscribedPosts(subscribedCreatorIds, 5);
-    const suggestions = await userRepository.findSuggestedCreators(userId, subscribedCreatorIds, 5);
+    // recentPosts and suggestions both need subscribedCreatorIds but are independent of each other
+    const [recentPosts, suggestions] = await Promise.all([
+      userRepository.findRecentSubscribedPosts(subscribedCreatorIds, 5),
+      userRepository.findSuggestedCreators(userId, subscribedCreatorIds, 5),
+    ]);
 
     return {
       user: {
@@ -164,6 +170,33 @@ const removePaymentMethod = async (userId, methodId) => {
   return true;
 };
 
+const reportUser = async (reportedById, reportedUserId, type, reason) => {
+  if (reportedById === reportedUserId) {
+    throw new Error('You cannot report yourself');
+  }
+  return userRepository.createReport(reportedById, reportedUserId, type, reason);
+};
+
+const subscribeToCreator = async (subscriberId, creatorId) => {
+  if (subscriberId === creatorId) {
+    throw new Error('You cannot subscribe to yourself');
+  }
+  
+  try {
+    const subscription = await userRepository.createSubscription(subscriberId, creatorId);
+    
+    await cache.del(`user:subscriptions:${subscriberId}`);
+    await cache.del(`user:dashboard:${subscriberId}`);
+    
+    return subscription;
+  } catch (error) {
+    if (error.code === 'P2002') { // Unique constraint violation
+      throw new Error('You are already subscribed to this creator');
+    }
+    throw error;
+  }
+};
+
 module.exports = {
   getUserProfile,
   updateUserProfile,
@@ -175,4 +208,6 @@ module.exports = {
   addPaymentMethod,
   removePaymentMethod,
   updateAvatar,
+  reportUser,
+  subscribeToCreator,
 };

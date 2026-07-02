@@ -1,6 +1,7 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -45,6 +46,15 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum NotificationType {
+  NEW_SUBSCRIPTION
+  NEW_COMMENT
+  NEW_LIKE
+  NEW_POST
+  SYSTEM
+  NEW_REPORT
+}
+
 model User {
   id           String         @id @default(uuid())
   email        String         @unique
@@ -58,6 +68,7 @@ model User {
   avatarUrl    String?
   
   tokens          RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   creatorProfile  CreatorProfile?
   subscriptions   Subscription[] @relation("Subscriber")
   subscribers     Subscription[] @relation("Creator")
@@ -68,6 +79,12 @@ model User {
   reportsReceived Report[]       @relation("ReportedUser")
   reportsFiled    Report[]       @relation("ReportedBy")
   tiers           SubscriptionTier[] @relation("CreatorTiers")
+  notifications   Notification[] @relation("UserNotifications")
+  fcmTokens       FcmToken[]
+  following       Follow[]       @relation("Following")
+  followers       Follow[]       @relation("Followers")
+
+  @@index([role])
 }
 
 model CreatorProfile {
@@ -98,21 +115,36 @@ model Subscription {
   id           String   @id @default(uuid())
   subscriberId String
   creatorId    String
-  
+
   subscriber   User     @relation("Subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
   creator      User     @relation("Creator", fields: [creatorId], references: [id], onDelete: Cascade)
-  
+
   status       SubscriptionStatus @default(ACTIVE)
   startDate    DateTime @default(now())
   endDate      DateTime
-  
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@unique([subscriberId, creatorId])
+  @@index([creatorId])
+  @@index([status])
+  @@index([subscriberId, status])
 }
 
 model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -134,9 +166,14 @@ model Post {
   comments        Comment[]
   likes           Like[]
   bookmarks       Bookmark[]     @relation("PostBookmarks")
-  
+
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@index([creatorId])
+  @@index([createdAt])
+  @@index([visibility])
+  @@index([creatorId, createdAt])
 }
 
 model Media {
@@ -144,9 +181,11 @@ model Media {
   postId    String
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   type      MediaType
-  url       String    
-  
+  url       String
+
   createdAt DateTime  @default(now())
+
+  @@index([postId])
 }
 
 model Comment {
@@ -158,6 +197,9 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([userId])
 }
 
 model Like {
@@ -169,6 +211,8 @@ model Like {
   createdAt DateTime @default(now())
 
   @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model Bookmark {
@@ -180,6 +224,8 @@ model Bookmark {
   createdAt DateTime @default(now())
 
   @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model Report {
@@ -196,4 +242,46 @@ model Report {
 
   @@index([reportedUserId])
   @@index([status])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           
+  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  linkUrl   String?          
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([userId, isRead])
+}
+
+model FcmToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  device    String?  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+  @@index([followerId])
 }

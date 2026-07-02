@@ -140,6 +140,33 @@ const deactivateUser = async (id) => {
   });
 };
 
+const createReport = async (reportedById, reportedUserId, type, reason) => {
+  return prisma.report.create({
+    data: {
+      reportedById,
+      reportedUserId,
+      type,
+      reason,
+      status: 'PENDING'
+    }
+  });
+};
+
+const createSubscription = async (subscriberId, creatorId) => {
+  // 30 days from now
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 30);
+
+  return prisma.subscription.create({
+    data: {
+      subscriberId,
+      creatorId,
+      status: 'ACTIVE',
+      endDate
+    }
+  });
+};
+
 module.exports = {
   findUserById,
   updateUserById,
@@ -149,4 +176,6 @@ module.exports = {
   findAllUserSubscriptions,
   cancelSubscription,
   deactivateUser,
+  createReport,
+  createSubscription,
 };

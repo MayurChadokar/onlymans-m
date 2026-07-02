@@ -1,3 +1,8 @@
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .dashboard-layout {
   height: 100vh;
   overflow: hidden;
@@ -493,7 +498,7 @@
   gap: 16px;
 }
 
-.action-left button {
+.post-actions button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -505,7 +510,7 @@
   cursor: pointer;
 }
 
-.action-left button:hover {
+.post-actions button:hover {
   color: white;
 }
 
@@ -836,3 +841,9 @@
   color: var(--text-primary);
   border-color: var(--border-subtle);
 }
+
+/* Icon Transitions */
+.like-icon, .bookmark-icon { transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), fill 0.2s ease, color 0.2s ease; }
+.like-icon.active, .bookmark-icon.active { transform: scale(1.2); }
+.bookmark-btn:active .bookmark-icon, .like-btn:active .like-icon { transform: scale(0.9); }
+

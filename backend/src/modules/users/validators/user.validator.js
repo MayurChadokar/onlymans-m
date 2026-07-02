@@ -7,6 +7,17 @@ const updateProfile = {
   }).min(1),
 };
 
+const reportUser = {
+  params: Joi.object().keys({
+    userId: Joi.string().uuid().required(),
+  }),
+  body: Joi.object().keys({
+    type: Joi.string().valid('SPAM', 'CONTENT_VIOLATION', 'HARASSMENT', 'IMPERSONATION', 'OTHER').required(),
+    reason: Joi.string().min(10).max(1000).required(),
+  }),
+};
+
 module.exports = {
   updateProfile,
+  reportUser,
 };

@@ -32,7 +32,20 @@ const getPublicCreatorProfile = async (creatorId) => {
   return cache.wrap(`creator:public:${creatorId}`, CREATOR_TTL, async () => {
     const profile = await creatorRepository.getProfileByUserId(creatorId);
     if (!profile) {
-      throw new Error('Creator not found');
+      const user = await creatorRepository.getUserById(creatorId);
+      if (!user) {
+        throw new Error('Creator not found');
+      }
+      return {
+        id: user.id,
+        username: user.username,
+        bio: 'Fan member',
+        price: 0.0,
+        avatarUrl: user.avatarUrl,
+        coverUrl: null,
+        joinedAt: user.createdAt,
+        tiers: []
+      };
     }
 
     const tiers = await creatorRepository.getTiersByCreatorId(creatorId);
@@ -113,7 +126,29 @@ const getSecureProfile = async (viewerId, creatorId) => {
   return cache.wrap(`creator:secure:${creatorId}:${viewerId}`, 60, async () => {
     const creator = await creatorRepository.getProfileByUserId(creatorId);
     if (!creator) {
-      throw new Error('Creator profile not found');
+      const user = await creatorRepository.getUserById(creatorId);
+      if (!user) {
+        throw new Error('Creator profile not found');
+      }
+      return {
+        profile: {
+          id: user.id,
+          username: user.username,
+          bio: 'Fan member',
+          price: 0,
+          avatarUrl: user.avatarUrl,
+          coverUrl: null,
+          createdAt: user.createdAt
+        },
+        isSubscribed: false,
+        stats: {
+          fansCount: 0,
+          postsCount: 0,
+          likesCount: 0
+        },
+        posts: [],
+        tiers: []
+      };
     }
 
     const isSelf = viewerId === creatorId;
@@ -134,6 +169,7 @@ const getSecureProfile = async (viewerId, creatorId) => {
         commentsEnabled: post.commentsEnabled,
         createdAt: post.createdAt,
         isLocked: showLocked,
+        likesCount: post._count?.likes || 0,
         media: post.media.map(item => ({
           id: item.id,
           type: item.type,

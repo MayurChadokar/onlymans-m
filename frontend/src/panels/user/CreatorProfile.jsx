@@ -6,6 +6,8 @@ import './Dashboard.css';
 import './CreatorProfile.css';
 import { apiRequest } from '../../utils/api';
 import { getAccessToken, getCurrentUser } from '../../utils/auth';
+import UserNavbar from '../../components/UserNavbar';
+import CreatorNavbar from '../../components/CreatorNavbar';
 
 const FALLBACK_COVER = 'https://picsum.photos/seed/city/800/300';
 const FALLBACK_AVATAR = 'https://i.pravatar.cc/150?img=11';
@@ -21,6 +23,7 @@ const CreatorProfile = () => {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
   const isCreator = currentUser?.role === 'CREATOR';
+  const isOwnProfile = isCreator && String(currentUser?.id) === String(creatorId);
   const homePath = isCreator ? '/creator-studio' : '/dashboard';
   const [isStripeModalOpen, setIsStripeModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -89,6 +92,7 @@ const CreatorProfile = () => {
             mediaUrl: firstMedia?.url || FALLBACK_COVER,
             type: firstMedia?.type || 'IMAGE',
             isLocked: Boolean(post.isLocked),
+            likesCount: post.likesCount || 0,
           };
         }));
       } catch (secureError) {
@@ -134,78 +138,85 @@ const CreatorProfile = () => {
 
     loadProfile();
     loadSimilarCreators();
-
     return () => {
       active = false;
     };
   }, [creatorId]);
 
-  const handleSubscribe = () => {
+  const [selectedTier, setSelectedTier] = useState(null);
+
+  const handleSubscribe = (tier = null) => {
+    setSelectedTier(tier);
     setIsStripeModalOpen(true);
   };
 
   return (
-    <div className="dashboard-layout">
-      <nav className="top-nav">
-        <div className="nav-left">
-          <Link to={homePath} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-          </Link>
-        </div>
-        <div className="nav-center">
-          <div className="search-bar">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input type="text" placeholder="Search creators, hashtags..." />
-          </div>
-        </div>
-        <div className="nav-right">
-          <button className="icon-btn">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
-          <div className="user-avatar">
-            <Link to="/user/profile"><img src={profileData.avatarUrl} alt="Profile" /></Link>
-          </div>
-        </div>
-      </nav>
+    <div className={isOwnProfile ? "creator-layout" : "dashboard-layout"}>
+      {isOwnProfile ? <CreatorNavbar /> : <UserNavbar />}
 
-      <div className="dashboard-content">
-        <aside className="left-sidebar">
-          <div className="nav-menu">
-            <Link to={homePath} className="menu-item">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
-              Home
-            </Link>
-            <Link to="/user/explore" className="menu-item active">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" /></svg>
-              Explore
-            </Link>
-            <Link to="/user/subscriptions" className="menu-item">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-              Subscriptions
-            </Link>
-            <Link to="/user/favorites" className="menu-item">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
-              Favorites
-            </Link>
-          </div>
-          <div className="promo-card">
-            <h4>{isCreator ? 'Creator Mode' : (isSubscribed ? 'Subscribed' : 'Be the Star')}</h4>
-            <p>{isCreator ? 'Manage your creator profile.' : (isSubscribed ? 'You already have access.' : 'Start sharing your world today.')}</p>
-            <Link to={isCreator ? '/creator-studio' : '/become-creator'} className="btn-gradient">
-              {isCreator ? 'Open Creator Studio' : 'Become a Creator'}
-            </Link>
-          </div>
-        </aside>
+      <div className={isOwnProfile ? "studio-content" : "dashboard-content"}>
+        {isOwnProfile ? (
+          <aside className="studio-sidebar" style={{ borderRight: '1px solid var(--border-color)', height: 'calc(100vh - 64px)' }}>
+            <div className="studio-menu">
+              <Link to="/creator/studio?tab=dashboard" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                Dashboard
+              </Link>
+              <Link to="/creator/create-post" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" strokeWidth="0"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"/></svg>
+                Create Post
+              </Link>
+              <Link to="/creator/studio?tab=posts" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+                Posts & Content
+              </Link>
+              <Link to="/creator/studio?tab=comments" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Comments
+              </Link>
+              <Link to="/creator/studio?tab=subscription" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                Subscription
+              </Link>
+              <Link to="/creator/subscribers" className="studio-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Subscribers
+              </Link>
+            </div>
+          </aside>
+        ) : (
+          <aside className="left-sidebar">
+            <div className="nav-menu">
+              <Link to={homePath} className="menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+                Home
+              </Link>
+              <Link to="/user/explore" className="menu-item active">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" /></svg>
+                Explore
+              </Link>
+              <Link to="/user/subscriptions" className="menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                Subscriptions
+              </Link>
+              <Link to="/user/favorites" className="menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                Favorites
+              </Link>
+            </div>
+            <div className="promo-card">
+              <h4>{isCreator ? 'Creator Mode' : (isSubscribed ? 'Subscribed' : 'Be the Star')}</h4>
+              <p>{isCreator ? 'Manage your creator profile.' : (isSubscribed ? 'You already have access.' : 'Start sharing your world today.')}</p>
+              <Link to={isCreator ? '/creator-studio' : '/become-creator'} className="btn-gradient">
+                {isCreator ? 'Open Creator Studio' : 'Become a Creator'}
+              </Link>
+            </div>
+          </aside>
+        )}
 
         <main className="main-feed" style={{ padding: 0, maxWidth: '750px', border: '1px solid var(--border-color)', borderRadius: '16px', overflowX: 'hidden', overflowY: 'auto', background: 'var(--bg-card)' }}>
           <div className="hero-banner-container" style={{ height: '220px', width: '100%', position: 'relative' }}>
-            <img src={profileData.coverUrl} alt="Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img loading="lazy" decoding="async" src={profileData.coverUrl} alt="Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', top: 16, left: 16, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '8px', cursor: 'pointer' }}>
               <Link to="/user/explore" style={{ color: 'white', display: 'flex' }}>
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
@@ -222,7 +233,7 @@ const CreatorProfile = () => {
               <>
                 <div className="profile-header-flex" style={{ marginTop: '-60px', position: 'relative', zIndex: 10 }}>
                   <div className="profile-avatar-wrapper" style={{ width: '120px', height: '120px', background: 'var(--bg-card)', border: '4px solid var(--bg-card)', borderRadius: '50%', padding: 0 }}>
-                    <img src={profileData.avatarUrl} alt={profileData.displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={profileData.avatarUrl} alt={profileData.displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                   </div>
 
                   <div className="profile-bio-section" style={{ marginTop: '8px' }}>
@@ -267,7 +278,7 @@ const CreatorProfile = () => {
                           <button onClick={handleSubscribe} className="btn-gradient small-btn">Unlock Access</button>
                         </div>
                       ) : (
-                        <div onClick={() => setSelectedPost(post)} style={{ cursor: 'pointer', height: '100%', width: '100%', position: 'relative', overflow: 'hidden', borderRadius: '12px' }} className="post-thumbnail-wrapper">
+                        <div onClick={() => navigate(`/post/${post.id}`)} style={{ cursor: 'pointer', height: '100%', width: '100%', position: 'relative', overflow: 'hidden', borderRadius: '12px' }} className="post-thumbnail-wrapper">
                           {post.type === 'VIDEO' ? (
                             <>
                               <video src={post.mediaUrl + "#t=0.1"} preload="metadata" style={{ objectFit: 'cover', width: '100%', height: '100%', display: 'block' }} />
@@ -277,7 +288,7 @@ const CreatorProfile = () => {
                             </>
                           ) : (
                             <>
-                              <img src={post.mediaUrl} alt="Post" style={{ objectFit: 'cover', width: '100%', height: '100%', display: 'block' }} />
+                              <img loading="lazy" decoding="async" src={post.mediaUrl} alt="Post" style={{ objectFit: 'cover', width: '100%', height: '100%', display: 'block' }} />
                               <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '6px', backdropFilter: 'blur(4px)' }}>
                                 <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                               </div>
@@ -318,14 +329,10 @@ const CreatorProfile = () => {
                   ))}
                 </ul>
                 <div className="tier-actions" style={{ marginTop: '20px' }}>
-                  <button onClick={handleSubscribe} className="btn-gradient w-100 tier-sub-btn" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
+                  <button onClick={() => handleSubscribe(tier)} className="btn-gradient w-100 tier-sub-btn" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
                     {isSubscribed ? 'Subscribed' : `Subscribe $${Number(tier.price).toFixed(2)}/mo`}
                     <small style={{ display: 'block' }}>{isSubscribed ? 'You are already a fan' : 'Become a Fan'}</small>
                   </button>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button className="btn-secondary-dark" style={{ flex: 1, padding: '10px' }}>Send Tip</button>
-                    <button className="btn-secondary-dark" style={{ padding: '10px 16px' }}>•••</button>
-                  </div>
                 </div>
               </div>
             ))
@@ -338,14 +345,10 @@ const CreatorProfile = () => {
                 <li><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#00B4D8" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Exclusive live streams</li>
               </ul>
               <div className="tier-actions" style={{ marginTop: '20px' }}>
-                <button onClick={handleSubscribe} className="btn-gradient w-100 tier-sub-btn" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
+                <button onClick={() => handleSubscribe(null)} className="btn-gradient w-100 tier-sub-btn" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
                   {isSubscribed ? 'Subscribed' : `Subscribe $${profileData.subscriptionPrice || '4.99'}/mo`}
                   <small style={{ display: 'block' }}>{isSubscribed ? 'You are already a fan' : 'Become a Fan'}</small>
                 </button>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button className="btn-secondary-dark" style={{ flex: 1, padding: '10px' }}>Send Tip</button>
-                  <button className="btn-secondary-dark" style={{ padding: '10px 16px' }}>•••</button>
-                </div>
               </div>
             </div>
           )}
@@ -355,7 +358,7 @@ const CreatorProfile = () => {
             <div className="similar-list">
               {similarCreators.map((creator) => (
                 <Link to={`/creator-profile/${creator.id}`} key={creator.id} className="similar-item" style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <img src={creator.creatorProfile?.avatarUrl || `https://i.pravatar.cc/150?u=${creator.username}`} alt={creator.username} />
+                  <img loading="lazy" decoding="async" src={creator.creatorProfile?.avatarUrl || `https://i.pravatar.cc/150?u=${creator.username}`} alt={creator.username} />
                   <div className="similar-info">
                     <h5>{creator.username}</h5>
                     <p>@{creator.username}</p>
@@ -389,71 +392,19 @@ const CreatorProfile = () => {
         </Link>
       </div>
 
-      {selectedPost && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={(e) => { if(e.target === e.currentTarget) setSelectedPost(null); }}>
-          <button onClick={() => setSelectedPost(null)} style={{ position: 'absolute', top: 24, right: 24, background: 'none', border: 'none', color: 'white', fontSize: '2.5rem', cursor: 'pointer', zIndex: 10000 }}>&times;</button>
-          
-          <div style={{ background: 'var(--bg-card)', borderRadius: '16px', overflow: 'hidden', width: '100%', maxWidth: '700px', display: 'flex', flexDirection: 'column', maxHeight: '90vh', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-            
-            {/* Media Section */}
-            <div style={{ width: '100%', backgroundColor: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-              {selectedPost.type === 'VIDEO' ? (
-                <video 
-                  src={selectedPost.mediaUrl} 
-                  controls 
-                  autoPlay 
-                  controlsList="nodownload"
-                  onContextMenu={(e) => e.preventDefault()}
-                  style={{ width: '100%', maxHeight: '60vh', outline: 'none' }}>
-                </video>
-              ) : (
-                <img 
-                  src={selectedPost.mediaUrl} 
-                  alt="Post" 
-                  onContextMenu={(e) => e.preventDefault()}
-                  style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain' }} 
-                />
-              )}
-            </div>
-
-            {/* Content Section */}
-            <div style={{ padding: '24px', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <img src={profileData.avatarUrl} alt="Creator" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
-                <div>
-                  <h3 style={{ margin: 0, color: 'var(--text-color)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {profileData.displayName}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#00B4D8"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
-                  </h3>
-                  <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>@{profileData.handle} • {selectedPost.createdAt}</p>
-                </div>
-              </div>
-
-              <p style={{ color: 'var(--text-color)', fontSize: '1.05rem', lineHeight: '1.5', whiteSpace: 'pre-wrap', marginBottom: '16px' }}>
-                {selectedPost.content}
-              </p>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px', color: 'var(--text-secondary)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                  <span>Like</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                  <span>Comment</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <StripeCheckoutModal
         isOpen={isStripeModalOpen}
         onClose={() => setIsStripeModalOpen(false)}
-        planName="Monthly Subscription"
-        price={`$${profileData.subscriptionPrice || '4.99'}`}
+        planName={selectedTier ? selectedTier.name : "Monthly Subscription"}
+        price={selectedTier ? `$${Number(selectedTier.price).toFixed(2)}` : `$${profileData.subscriptionPrice || '4.99'}`}
         creatorName={profileData.displayName || 'Creator'}
+        avatarUrl={profileData.avatarUrl}
+        creatorId={creatorId}
+        onSuccess={() => {
+          setIsSubscribed(true);
+          setPosts(prevPosts => prevPosts.map(post => ({ ...post, isLocked: false })));
+        }}
       />
     </div>
   );

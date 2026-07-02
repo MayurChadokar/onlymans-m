@@ -4,6 +4,8 @@ import Logo from '../../components/Logo';
 import './CreatorStudio.css';
 import { apiRequest } from '../../utils/api';
 import { clearAuthSession, getAccessToken, getCurrentUser, getRefreshToken } from '../../utils/auth';
+import CreatorNavbar from '../../components/CreatorNavbar';
+import { toast } from 'react-hot-toast';
 
 
 const mapPost = (post) => ({
@@ -17,6 +19,7 @@ const mapPost = (post) => ({
 
 const mapComment = (comment) => ({
   id: comment.id,
+  userId: comment.user?.id || comment.userId,
   username: comment.user?.username || comment.author?.username || 'fan',
   avatar: comment.user?.avatarUrl || `https://i.pravatar.cc/150?u=${comment.user?.username || comment.author?.username || comment.id}`,
   content: comment.content || '',
@@ -34,6 +37,7 @@ const CreatorStudio = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [searchTerm, setSearchTerm] = useState('');
   const [user, setUser] = useState(() => getCurrentUser());
 
   const [dashboardLoading, setDashboardLoading] = useState(true);
@@ -61,11 +65,20 @@ const CreatorStudio = () => {
   const [subStats, setSubStats] = useState({ totalActive: 0, revenue: 0 });
   const [creatorComments, setCreatorComments] = useState([]);
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [mediaFiles, setMediaFiles] = useState([]);
   const [caption, setCaption] = useState('');
   const [monetization, setMonetization] = useState('Subscriber Exclusive');
+
+  useEffect(() => {
+    return () => {
+      // Clean up object URLs to avoid memory leaks
+      mediaFiles.forEach(item => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
+    };
+  }, []);
 
   const [tiers, setTiers] = useState([]);
   const [tiersLoading, setTiersLoading] = useState(false);
@@ -76,11 +89,7 @@ const CreatorStudio = () => {
 
   const [editingPostId, setEditingPostId] = useState(null);
   const [editPostData, setEditPostData] = useState({ caption: '', status: 'Free' });
-  const [messages] = useState([
-    { id: 1, from: 'fanboy99', avatar: 'https://i.pravatar.cc/150?u=fanboy99', text: 'Love your latest post!', time: '2 hours ago', unread: true },
-    { id: 2, from: 'mystery_user', avatar: 'https://i.pravatar.cc/150?u=mystery_user', text: 'When is the next live stream?', time: '5 hours ago', unread: true },
-    { id: 3, from: 'sarah_vlogs', avatar: 'https://i.pravatar.cc/150?u=sarah_vlogs', text: 'Hey! Wanna collab?', time: '1 day ago', unread: false },
-  ]);
+
   const currentUser = getCurrentUser();
   const isCreator = currentUser?.role === 'CREATOR';
 
@@ -292,100 +301,168 @@ const CreatorStudio = () => {
     }
   };
 
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
-    setUploadProgress(0);
-    setIsUploading(false);
+  const getUploadUrl = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+    return baseUrl.replace(/\/$/, '') + '/media/upload';
+  };
+
+  const uploadFile = (entry) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', getUploadUrl(), true);
+    
+    const token = getAccessToken();
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        setMediaFiles(prev => prev.map(item => item.id === entry.id ? { ...item, progress: percentComplete } : item));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const resObj = JSON.parse(xhr.responseText);
+          if (resObj && resObj.url) {
+            setMediaFiles(prev => prev.map(item => item.id === entry.id ? { 
+              ...item, 
+              status: 'completed', 
+              progress: 100, 
+              url: resObj.url 
+            } : item));
+            toast.success(`Uploaded ${entry.name} successfully! 🚀`);
+          } else {
+            throw new Error('No URL in response');
+          }
+        } catch (e) {
+          setMediaFiles(prev => prev.map(item => item.id === entry.id ? { ...item, status: 'failed', error: 'Response error' } : item));
+          toast.error(`Upload error for ${entry.name}`);
+        }
+      } else {
+        setMediaFiles(prev => prev.map(item => item.id === entry.id ? { ...item, status: 'failed', error: `Server error: ${xhr.status}` } : item));
+        toast.error(`Failed to upload ${entry.name}: Server error`);
+      }
+    };
+
+    xhr.onerror = () => {
+      setMediaFiles(prev => prev.map(item => item.id === entry.id ? { ...item, status: 'failed', error: 'Network error' } : item));
+      toast.error(`Network error uploading ${entry.name}`);
+    };
+
+    const formData = new FormData();
+    formData.append('file', entry.file);
+    xhr.send(formData);
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newEntries = files.map((file, index) => {
+      const isVideo = file.type.startsWith('video/');
+      return {
+        id: Date.now() + '-' + index + '-' + Math.random().toString(36).substr(2, 9),
+        file,
+        name: file.name,
+        size: file.size,
+        type: isVideo ? 'VIDEO' : 'IMAGE',
+        progress: 0,
+        status: 'pending',
+        url: '',
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
+
+    setMediaFiles(prev => [...prev, ...newEntries]);
+
+    // Start uploads immediately
+    newEntries.forEach(entry => {
+      uploadFile(entry);
+    });
+  };
+
+  const handleRemoveFile = (id) => {
+    setMediaFiles(prev => {
+      const target = prev.find(item => item.id === id);
+      if (target && target.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter(item => item.id !== id);
+    });
   };
 
   const handlePostSubmit = async () => {
     if (!isCreator) {
-      alert('Only creators can create posts.');
+      toast.error('Only creators can create posts.');
       return;
     }
 
-    const content = caption.trim();
-    if (!content && !selectedFile) {
-      alert('Please add a caption or select a file before posting.');
+    if (mediaFiles.length === 0) {
+      toast.error("Please select at least one media file to upload first!");
       return;
     }
 
+    const isAnyUploading = mediaFiles.some(item => item.status === 'uploading' || item.status === 'pending');
+    if (isAnyUploading) {
+      toast.error("Please wait for all media to finish uploading!");
+      return;
+    }
+
+    const isAnyFailed = mediaFiles.some(item => item.status === 'failed');
+    if (isAnyFailed) {
+      toast.error("Some uploads failed. Please remove failed files or retry.");
+      return;
+    }
+
+    const completedMedia = mediaFiles
+      .filter(item => item.status === 'completed')
+      .map(item => ({
+        type: item.type,
+        url: item.url
+      }));
+
+    if (completedMedia.length === 0) {
+      toast.error("No successfully uploaded media found!");
+      return;
+    }
+
+    setIsSubmittingPost(true);
     try {
-      setIsSubmittingPost(true);
-      let mediaArray = [];
-
-      if (selectedFile) {
-        // Prepare FormData for direct upload
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
-        // Upload the file using XMLHttpRequest to track progress
-        setIsUploading(true);
-        const uploadResponse = await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
-          xhr.open('POST', `${apiBase}/media/upload`);
-          xhr.setRequestHeader('Authorization', `Bearer ${getAccessToken()}`);
-
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              setUploadProgress(Math.round((e.loaded / e.total) * 100));
-            }
-          };
-
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              setUploadProgress(100);
-              try {
-                const response = JSON.parse(xhr.responseText);
-                resolve(response);
-              } catch (e) {
-                resolve({ url: xhr.responseText });
-              }
-            } else {
-              let errMsg = `Upload failed with status ${xhr.status}`;
-              try {
-                const errBody = JSON.parse(xhr.responseText);
-                if (errBody.message) errMsg = errBody.message;
-              } catch (_) {}
-              reject(new Error(errMsg));
-            }
-          };
-
-          xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.send(formData);
-        });
-        setIsUploading(false);
-
-        const mediaUrl = uploadResponse.url;
-        const mediaType = selectedFile.type.startsWith('video/') ? 'VIDEO' : 'IMAGE';
-        mediaArray = [{ type: mediaType, url: mediaUrl }];
-      }
-
-      // Step 4: Create the post with content + media
+      const visibility = monetization === 'Subscriber Exclusive' ? 'PREMIUM' : 'PUBLIC';
+      const content = caption.trim() || mediaFiles[0].name.replace(/\.[^.]+$/, '');
       const response = await apiRequest('/posts', {
         method: 'POST',
         token: getAccessToken(),
         body: {
-          content: content || selectedFile.name.replace(/\.[^.]+$/, ''),
-          visibility: monetization === 'Subscriber Exclusive' ? 'PREMIUM' : 'PUBLIC',
-          media: mediaArray,
+          content,
+          visibility,
+          media: completedMedia
         },
       });
 
-      if (response.post) {
+      if (response && response.post) {
+        toast.success(`Post submitted successfully! 🎉`);
         setPosts((prev) => [mapPost(response.post), ...prev]);
+        
+        // Reset form
+        mediaFiles.forEach(item => {
+          if (item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        });
+        setMediaFiles([]);
+        setCaption('');
+        setMonetization('Subscriber Exclusive');
+        setActiveTab('posts');
+      } else {
+        throw new Error('Failed to submit post');
       }
-      setSelectedFile(null);
-      setCaption('');
-      setMonetization('Subscriber Exclusive');
-      setUploadProgress(0);
-      setActiveTab('posts');
     } catch (error) {
-      setIsUploading(false);
-      alert(error.message || 'Could not create post');
+      console.error('Post submit error:', error);
+      toast.error(error.message || 'Failed to submit post. Please try again.');
     } finally {
       setIsSubmittingPost(false);
     }
@@ -489,9 +566,22 @@ const CreatorStudio = () => {
     { id: 'comments', label: 'Comments', icon: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg> },
     { id: 'subscription', label: 'Subscription', icon: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg> },
     { id: 'statistics', label: 'Statistics', icon: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6" /></svg> },
-    { id: 'messages', label: 'Messages', icon: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg> },
     { id: 'subscribers', label: 'Subscribers', icon: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg> },
   ];
+
+  const filteredPosts = posts.filter(post => (post.content || '').toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredComments = creatorComments.filter(comment => 
+    (comment.content || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (comment.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (comment.postTitle || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const filteredSubscribers = subscribers.filter(sub => 
+    (sub.userUsername || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredTiers = tiers.filter(tier => 
+    (tier.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const renderDashboard = () => (
     <div className="manage-dashboard-view">
@@ -641,7 +731,7 @@ const CreatorStudio = () => {
 
       <h3>Your Posts</h3>
       <div className="manage-posts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))', gap: '20px', marginTop: '16px' }}>
-        {posts.map((post) => (
+        {filteredPosts.map((post) => (
           <div key={post.id} className="manage-post-card" style={{ background: 'var(--bg-card)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
             <div style={{ position: 'relative', height: '160px' }}>
               <img src={post.mediaUrl} alt="Post" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -684,7 +774,7 @@ const CreatorStudio = () => {
         </div>
         <div className="upload-area">
           <div className="upload-box">
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="video/mp4,video/quicktime,image/jpeg,image/png" />
+            <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="video/mp4,video/quicktime,image/jpeg,image/png" />
             <div className="upload-icon-wrapper">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#FFA52C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             </div>
@@ -693,16 +783,63 @@ const CreatorStudio = () => {
             <button className="btn-browse" onClick={() => fileInputRef.current?.click()}>Browse Files</button>
           </div>
         </div>
-        {selectedFile && (
-          <div className="upload-progress-card">
-            <div className="upload-progress-info">
-              <div className="file-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1-.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z" /></svg></div>
-              <div className="file-details">
-                <div className="file-name-row"><span>{selectedFile.name}</span><span className="file-percentage">{uploadProgress}%</span></div>
-                <div className="file-meta">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • {isUploading ? 'UPLOADING' : uploadProgress === 100 ? 'COMPLETED' : 'READY'}</div>
+        {mediaFiles.length > 0 && (
+          <div className="media-preview-list">
+            {mediaFiles.map((item) => (
+              <div key={item.id} className="media-preview-card">
+                <button className="btn-remove-media" onClick={() => handleRemoveFile(item.id)} title="Remove media">×</button>
+                <div className="media-preview-thumb">
+                  {item.type === 'VIDEO' ? (
+                    <video src={item.previewUrl} muted playsInline />
+                  ) : (
+                    <img src={item.previewUrl} alt={item.name} />
+                  )}
+                  <span className="media-preview-type-badge">{item.type}</span>
+                </div>
+                <div className={`media-preview-status ${item.status}`}>
+                  <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', fontSize: '0.7rem' }}>
+                    {item.name}
+                  </div>
+                  {item.status === 'uploading' && (
+                    <>
+                      <div className="media-preview-progress-bar">
+                        <div className="media-preview-progress-fill" style={{ width: `${item.progress}%` }}></div>
+                      </div>
+                      <span>Uploading ({item.progress}%)</span>
+                    </>
+                  )}
+                  {item.status === 'completed' && <span>Ready 🚀</span>}
+                  {item.status === 'failed' && <span style={{ color: '#ff4a4a' }}>Failed</span>}
+                </div>
+              </div>
+            ))}
+            
+            <div 
+              className="media-preview-card add-more-card" 
+              onClick={() => fileInputRef.current?.click()} 
+              style={{ 
+                cursor: 'pointer', 
+                border: '2px dashed var(--border-color)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                background: 'rgba(255, 255, 255, 0.02)',
+                transition: 'background 0.2s, border-color 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'var(--accent-secondary-text)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: '2rem', fontWeight: '300', lineHeight: '1' }}>+</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: '500' }}>Add More</span>
               </div>
             </div>
-            <div className="upload-progress-bar"><div className="upload-progress-fill" style={{ width: `${uploadProgress}%`, background: uploadProgress === 100 ? '#4caf50' : '' }} /></div>
           </div>
         )}
       </div>
@@ -724,10 +861,17 @@ const CreatorStudio = () => {
           </label>
         </div>
         <div className="studio-actions">
-          <button className="btn-primary-gradient" onClick={handlePostSubmit} disabled={isUploading || isSubmittingPost} style={{ opacity: isUploading || isSubmittingPost ? 0.6 : 1 }}>
-            {isUploading ? 'Uploading media...' : isSubmittingPost ? 'Creating post...' : 'Post Content Now'}
+          <button className="btn-primary-gradient" onClick={handlePostSubmit} disabled={isSubmittingPost || mediaFiles.some(item => item.status === 'uploading' || item.status === 'pending')} style={{ opacity: isSubmittingPost || mediaFiles.some(item => item.status === 'uploading' || item.status === 'pending') ? 0.6 : 1 }}>
+            {isSubmittingPost ? 'Creating post...' : mediaFiles.some(item => item.status === 'uploading' || item.status === 'pending') ? 'Uploading media...' : 'Post Content Now'}
           </button>
-          <button className="btn-secondary-dark" onClick={() => { setSelectedFile(null); setCaption(''); setUploadProgress(0); setIsUploading(false); }}>Clear Form</button>
+          <button className="btn-secondary-dark" onClick={() => {
+            mediaFiles.forEach(item => {
+              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            });
+            setMediaFiles([]);
+            setCaption('');
+            setMonetization('Subscriber Exclusive');
+          }}>Clear Form</button>
         </div>
       </div>
     </div>
@@ -757,7 +901,7 @@ const CreatorStudio = () => {
         <p>Manage, edit, or delete your content.</p>
       </div>
       <div className="manage-posts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))', gap: '20px', marginTop: '16px' }}>
-        {posts.map((post) => (
+        {filteredPosts.map((post) => (
           <div key={post.id} className="manage-post-card" style={{ background: 'var(--bg-card)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
             <div style={{ position: 'relative', height: '160px' }}>
               {renderMediaThumbnail(post)}
@@ -788,15 +932,29 @@ const CreatorStudio = () => {
           <p style={{ color: 'var(--text-secondary)' }}>Loading comments...</p>
         ) : commentsError ? (
           <p style={{ color: '#ff6b6b' }}>{commentsError}</p>
-        ) : creatorComments.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>No comments yet.</p>
+        ) : filteredComments.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)' }}>No comments found.</p>
         ) : (
           <div style={{ marginTop: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {creatorComments.map((comment) => (
+            {filteredComments.map((comment) => (
               <div key={comment.id} style={{ display: 'flex', gap: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-                <img src={comment.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%' }} alt={comment.username} />
+                {comment.userId ? (
+                  <Link to={`/creator-profile/${comment.userId}`} style={{ textDecoration: 'none' }}>
+                    <img src={comment.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer' }} alt={comment.username} />
+                  </Link>
+                ) : (
+                  <img src={comment.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%' }} alt={comment.username} />
+                )}
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-color)', margin: '0 0 4px 0' }}><span style={{ fontWeight: 'bold' }}>@{comment.username}</span> on {comment.postTitle}</p>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-color)', margin: '0 0 4px 0' }}>
+                    {comment.userId ? (
+                      <Link to={`/creator-profile/${comment.userId}`} style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
+                        @{comment.username}
+                      </Link>
+                    ) : (
+                      <span style={{ fontWeight: 'bold' }}>@{comment.username}</span>
+                    )} on {comment.postTitle}
+                  </p>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>{comment.content}</p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '6px 0 0' }}>{comment.createdAt}</p>
                   <button
@@ -836,7 +994,7 @@ const CreatorStudio = () => {
       </div>
       <div style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
         <h3 style={{ marginBottom: '16px', color: 'var(--text-color)' }}>Top Performing Posts</h3>
-        {posts.slice(0, 5).map((post) => (
+        {filteredPosts.slice(0, 5).map((post) => (
           <div key={post.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 0', borderBottom: '1px solid var(--border-color)' }}>
             <div style={{ position: 'relative', width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
               {renderMediaThumbnail(post, true)}
@@ -851,31 +1009,7 @@ const CreatorStudio = () => {
     </div>
   );
 
-  const renderMessages = () => (
-    <div>
-      <div className="upload-header">
-        <h2>Messages</h2>
-        <p>Connect with your subscribers and fans.</p>
-      </div>
-      <div style={{ background: 'var(--bg-card)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-        {messages.map((msg) => (
-          <div key={msg.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px 24px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', background: msg.unread ? 'rgba(0,180,216,0.03)' : 'transparent' }}>
-            <div style={{ position: 'relative' }}>
-              <img src={msg.avatar} alt={msg.from} style={{ width: '48px', height: '48px', borderRadius: '50%' }} />
-              {msg.unread && <div style={{ position: 'absolute', top: '0', right: '0', width: '12px', height: '12px', background: '#00B4D8', borderRadius: '50%', border: '2px solid var(--bg-card)' }} />}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <h4 style={{ fontSize: '0.95rem', color: 'var(--text-color)', fontWeight: msg.unread ? '700' : '500' }}>@{msg.from}</h4>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{msg.time}</span>
-              </div>
-              <p style={{ color: msg.unread ? 'var(--text-color)' : 'var(--text-secondary)', fontSize: '0.85rem' }}>{msg.text}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+
 
   const renderSubscribers = () => (
     <div>
@@ -908,7 +1042,7 @@ const CreatorStudio = () => {
               </tr>
             </thead>
             <tbody>
-              {subscribers.map((sub) => (
+              {filteredSubscribers.map((sub) => (
                 <tr key={sub.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                   <td style={{ padding: '16px 24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -945,7 +1079,7 @@ const CreatorStudio = () => {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
-        {tiers.map((tier, index) => (
+        {filteredTiers.map((tier, index) => (
           <div key={tier.id} style={{ background: 'var(--bg-card)', borderRadius: '12px', border: index === 0 ? '1px solid #00B4D8' : '1px solid var(--border-color)', padding: '24px', position: 'relative' }}>
             {index === 0 && (
               <span style={{ position: 'absolute', top: '-12px', right: '24px', background: '#00B4D8', color: 'white', padding: '4px 12px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
@@ -1076,8 +1210,7 @@ const CreatorStudio = () => {
         return renderSubscription();
       case 'statistics':
         return renderStatistics();
-      case 'messages':
-        return renderMessages();
+
       case 'subscribers':
         return renderSubscribers();
       default:
@@ -1087,68 +1220,7 @@ const CreatorStudio = () => {
 
   return (
     <div className="creator-layout">
-      <nav className="studio-top-nav">
-        <div className="nav-left" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px' }}>
-            {isMobileMenuOpen ? (
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-            ) : (
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-            )}
-          </button>
-          <Link to="/creator/studio" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-            <span className="creator-badge" style={{ marginLeft: '4px' }}>CREATOR</span>
-          </Link>
-        </div>
-        <div className="nav-right">
-          <div className="search-analytics">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input type="text" placeholder="Search analytics..." />
-          </div>
-          <button className="icon-btn" onClick={toggleTheme} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '50%' }} title="Toggle Theme">
-            {theme === 'dark' ? (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
-            ) : (
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-            )}
-          </button>
-          <button className="icon-btn">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-          </button>
-          <div className="user-avatar" style={{ position: 'relative' }}>
-            <img src={user?.avatar || 'https://i.pravatar.cc/150?img=11'} alt="Profile" onClick={() => setShowDropdown(!showDropdown)} />
-            {showDropdown && (
-              <div
-                style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}
-                onClick={() => setShowDropdown(false)}
-              >
-                <Link
-                  to="/creator/settings"
-                  style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}
-                >
-                  ⚙️ Account Settings
-                </Link>
-                {user?.id && (
-                  <Link
-                    to={`/creator-profile/${user.id}`}
-                    style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}
-                  >
-                    👤 My Creator Page
-                  </Link>
-                )}
-                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                <button
-                  onClick={handleLogout}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                >
-                  🚪 Log Out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+      <CreatorNavbar isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       {isMobileMenuOpen && (
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
@@ -1208,18 +1280,7 @@ const CreatorStudio = () => {
         </main>
       </div>
 
-      <div className="mobile-bottom-nav">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`mobile-bottom-item ${activeTab === item.id ? 'active' : ''}`}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
+
     </div>
   );
 };

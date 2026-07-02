@@ -1,9 +1,28 @@
 const postService = require('../services/post.service');
+const { notificationService } = require('../../notifications');
+const { prisma } = require('../../../config/database');
 
 const createPost = async (req, res, next) => {
   try {
     const post = await postService.createPost(req.user.id, req.body);
+    
     res.status(201).json({ post });
+
+    // Fire-and-forget: notify subscribers after response is sent
+    prisma.subscription.findMany({
+      where: { creatorId: req.user.id, status: 'ACTIVE' },
+      select: { subscriberId: true }
+    }).then(subscribers =>
+      Promise.all(subscribers.map(sub =>
+        notificationService.createAndSendNotification(
+          sub.subscriberId,
+          'NEW_POST',
+          'New Post',
+          `${req.user.username || 'A creator'} posted something new.`,
+          `/post/${post.id}`
+        )
+      ))
+    ).catch(() => {});
   } catch (error) {
     error.statusCode = 400;
     next(error);
@@ -13,8 +32,10 @@ const createPost = async (req, res, next) => {
 const getCreatorFeed = async (req, res, next) => {
   try {
     const { creatorId } = req.params;
-    const posts = await postService.getCreatorFeed(req.user.id, creatorId);
-    res.json({ posts });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const posts = await postService.getCreatorFeed(req.user.id, creatorId, page, limit);
+    res.json({ posts, page, limit });
   } catch (error) {
     next(error);
   }
@@ -46,6 +67,19 @@ const createComment = async (req, res, next) => {
     const { postId } = req.params;
     const { content } = req.body;
     const comment = await postService.addComment(req.user.id, postId, content);
+    
+    // Notify post creator
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { creatorId: true } });
+    if (post && post.creatorId !== req.user.id) {
+      await notificationService.createAndSendNotification(
+        post.creatorId,
+        'NEW_COMMENT',
+        'New Comment',
+        `${req.user.username || 'Someone'} commented on your post.`,
+        `/post/${postId}`
+      );
+    }
+
     res.status(201).json({ comment });
   } catch (error) {
     next(error);
@@ -83,6 +117,16 @@ const toggleBookmark = async (req, res, next) => {
   }
 };
 
+const getPostDetails = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const post = await postService.getPostDetails(req.user.id, postId);
+    res.json({ post });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPost,
   getCreatorFeed,
@@ -91,5 +135,6 @@ module.exports = {
   createComment,
   getComments,
   deleteComment,
-  toggleBookmark
+  toggleBookmark,
+  getPostDetails
 };

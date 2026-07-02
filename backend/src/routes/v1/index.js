@@ -9,6 +9,7 @@ const { mediaRoutes } = require('../../modules/media');
 const { feedRoutes } = require('../../modules/feed');
 const { videoRoutes } = require('../../modules/videos');
 const { adminRoutes } = require('../../modules/admin');
+const { notificationRoutes } = require('../../modules/notifications');
 
 const router = express.Router();
 
@@ -56,6 +57,10 @@ const defaultRoutes = [
   {
     path: '/admin',
     route: adminRoutes,
+  },
+  {
+    path: '/notifications',
+    route: notificationRoutes,
   },
 ];
 

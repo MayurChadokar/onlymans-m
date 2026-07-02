@@ -1,5 +1,12 @@
 const Joi = require('joi');
 
+const login = {
+  body: Joi.object().keys({
+    email: Joi.string().email().required(),
+    password: Joi.string().required(),
+  }),
+};
+
 const getUsers = {
   query: Joi.object().keys({
     page: Joi.number().integer().min(1).default(1),
@@ -132,6 +139,7 @@ const blockAndResolve = {
 };
 
 module.exports = {
+  login,
   getUsers,
   getUserById,
   updateUserStatus,

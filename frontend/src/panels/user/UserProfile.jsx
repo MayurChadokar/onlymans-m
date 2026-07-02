@@ -5,6 +5,7 @@ import Logo from '../../components/Logo';
 import { apiRequest } from '../../utils/api';
 import { getAccessToken, getCurrentUser } from '../../utils/auth';
 import { toast } from 'react-hot-toast';
+import UserNavbar from '../../components/UserNavbar';
 
 const UserProfile = () => {
   const navigate = useNavigate();
@@ -116,6 +117,30 @@ const UserProfile = () => {
           },
         });
         toast.success('Creator profile saved successfully! 🎉', { id: loadingToast });
+      } else {
+        const body = {};
+        if (editData.username !== user.username) {
+          body.username = editData.username;
+        }
+        
+        if (Object.keys(body).length > 0) {
+          const res = await apiRequest('/users/profile', {
+            method: 'PATCH',
+            token: getAccessToken(),
+            body,
+          });
+          if (res.user) {
+            setUser(res.user);
+            // Update local storage
+            const sessionStr = localStorage.getItem('onlymans_auth_session');
+            if (sessionStr) {
+              const session = JSON.parse(sessionStr);
+              session.user = { ...session.user, username: res.user.username };
+              localStorage.setItem('onlymans_auth_session', JSON.stringify(session));
+            }
+          }
+        }
+        toast.success('Profile saved successfully! 🎉', { id: loadingToast });
       }
       setIsEditing(false);
     } catch (err) {
@@ -134,29 +159,7 @@ const UserProfile = () => {
   return (
     <div className="dashboard-layout">
       {/* Top Navbar */}
-      <nav className="top-nav">
-        <div className="nav-left">
-          <Link to={homePath} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-          </Link>
-        </div>
-        <div className="nav-center">
-          <div className="search-bar">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" placeholder="Search creators, hashtags..." />
-          </div>
-        </div>
-        <div className="nav-right">
-          <div className="user-avatar" style={{ position: 'relative' }}>
-            <Link to="/user/profile"><img src={user?.avatar || "https://i.pravatar.cc/150?img=11"} alt="Profile" style={{ borderColor: '#FFA52C' }} /></Link>
-            {isCreator && (
-              <div style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#00B4D8', color: 'white', fontSize: '0.65rem', fontWeight: 700, padding: '3px 6px', borderRadius: '999px', letterSpacing: '0.04em' }}>
-                CREATOR
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+      <UserNavbar />
 
       <div className="dashboard-content">
         {/* Left Sidebar */}
@@ -244,7 +247,7 @@ const UserProfile = () => {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                   <div style={{ position: 'relative' }}>
-                    <img
+                    <img loading="lazy" decoding="async" 
                       src={creatorProfile?.avatarUrl || user?.avatar || "https://i.pravatar.cc/150?img=11"}
                       alt="Profile"
                       style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #00B4D8' }}
@@ -385,7 +388,7 @@ const UserProfile = () => {
                   <button onClick={() => setIsEditing(true)} className="btn-secondary-dark" style={{ padding: '8px 16px', borderRadius: '8px' }}>Edit Profile</button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <img
+                  <img loading="lazy" decoding="async" 
                     src={user?.avatar || "https://i.pravatar.cc/150?img=11"}
                     alt="Profile"
                     style={{ width: '80px', height: '80px', borderRadius: '50%', border: '2px solid var(--border-color)' }}
@@ -497,7 +500,7 @@ const UserProfile = () => {
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Bio</label>
               <textarea value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} style={{ width: '100%', padding: '12px', background: 'var(--bg-input, rgba(255,255,255,0.03))', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-color)', height: '100px', resize: 'none', fontFamily: 'inherit' }}></textarea>
             </div>
-            <button onClick={() => setIsEditing(false)} className="btn-primary-gradient" style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold' }}>Save Profile</button>
+            <button onClick={handleSaveProfile} disabled={isSaving} className="btn-primary-gradient" style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', opacity: isSaving ? 0.7 : 1 }}>{isSaving ? 'Saving...' : 'Save Profile'}</button>
           </div>
         </div>
       )}

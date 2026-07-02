@@ -1,18 +1,20 @@
 const { prisma } = require('../../../config/database');
 const cache = require('../../../cache/cache.service');
 
-const getRandomFeed = async (userId) => {
-  // Short TTL (30s) — keeps it feeling fresh while avoiding repeated heavy queries
-  return cache.wrap(`feed:random:${userId}`, 30, async () => {
-    const posts = await prisma.post.findMany({
-      where: { visibility: 'PUBLIC' },
-      select: { id: true }
-    });
+const getRandomFeed = async (userId, limit = 10, bust = false) => {
+  // Rotate every 2 minutes so users auto-get fresh content on each visit
+  const timeBucket = Math.floor(Date.now() / (2 * 60 * 1000));
+  const cacheKey = `feed:random:${userId}:limit:${limit}:t:${timeBucket}`;
 
-    const shuffledPostIds = posts.sort(() => 0.5 - Math.random()).slice(0, 10).map(p => p.id);
+  if (bust) await cache.del(cacheKey);
 
-    const randomPosts = await prisma.post.findMany({
-      where: { id: { in: shuffledPostIds } },
+  return cache.wrap(cacheKey, 120, async () => {
+    // 1. Fetch random public post IDs using DB-level randomization
+    const randomPostRows = await prisma.$queryRawUnsafe(`SELECT id FROM "Post" WHERE visibility::text = 'PUBLIC' ORDER BY RANDOM() LIMIT $1`, limit);
+    const randomPostIds = randomPostRows.map(row => row.id);
+
+    const randomPosts = randomPostIds.length > 0 ? await prisma.post.findMany({
+      where: { id: { in: randomPostIds } },
       include: {
         media: true,
         creator: {
@@ -25,10 +27,11 @@ const getRandomFeed = async (userId) => {
           }
         },
         _count: { select: { likes: true, comments: true } },
-        likes: { where: { userId }, select: { userId: true } }
+        likes: { where: { userId }, select: { userId: true } },
+        bookmarks: { where: { userId }, select: { userId: true } }
       },
       orderBy: { createdAt: 'desc' }
-    });
+    }) : [];
 
     const activeSubs = await prisma.subscription.findMany({
       where: {
@@ -40,24 +43,22 @@ const getRandomFeed = async (userId) => {
       }
     });
     const excludeCreatorIds = activeSubs.map(s => s.creatorId);
+    const excludeIds = [userId, ...excludeCreatorIds];
 
-    const creators = await prisma.user.findMany({
-      where: {
-        role: 'CREATOR',
-        id: {
-          notIn: [userId, ...excludeCreatorIds]
-        },
-        creatorProfile: {
-          isNot: null
-        }
-      },
-      select: { id: true }
-    });
+    // 2. Fetch 5 random creator IDs using DB-level randomization
+    const randomCreatorRows = await prisma.$queryRaw`
+      SELECT u.id
+      FROM "User" u
+      JOIN "CreatorProfile" cp ON u.id = cp."userId"
+      WHERE u.role::text = 'CREATOR'
+      AND u.id != ALL (${excludeIds})
+      ORDER BY RANDOM()
+      LIMIT 5
+    `;
+    const randomCreatorIds = randomCreatorRows.map(row => row.id);
 
-    const shuffledCreatorIds = creators.sort(() => 0.5 - Math.random()).slice(0, 5).map(c => c.id);
-
-    const randomCreators = await prisma.user.findMany({
-      where: { id: { in: shuffledCreatorIds } },
+    const randomCreators = randomCreatorIds.length > 0 ? await prisma.user.findMany({
+      where: { id: { in: randomCreatorIds } },
       select: {
         id: true,
         username: true,
@@ -70,7 +71,7 @@ const getRandomFeed = async (userId) => {
           }
         }
       }
-    });
+    }) : [];
 
     return {
       posts: randomPosts.map(p => ({
@@ -78,8 +79,10 @@ const getRandomFeed = async (userId) => {
         likesCount: p._count.likes,
         commentsCount: p._count.comments,
         isLiked: p.likes.some(l => l.userId === userId),
+        isBookmarked: p.bookmarks.some(b => b.userId === userId),
         _count: undefined,
-        likes: undefined
+        likes: undefined,
+        bookmarks: undefined
       })),
       suggestedCreators: randomCreators.map(c => ({
         id: c.id,

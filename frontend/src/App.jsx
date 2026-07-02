@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { apiRequest } from './utils/api';
@@ -6,30 +6,40 @@ import { clearAuthSession, getAccessToken, getCurrentUser, updateAuthUser } from
 import { Toaster } from 'react-hot-toast';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-import Login        from './panels/auth/Login';
-import Signup       from './panels/auth/Signup';
+const Login          = lazy(() => import('./panels/auth/Login'));
+const Signup         = lazy(() => import('./panels/auth/Signup'));
+const ForgotPassword = lazy(() => import('./panels/auth/ForgotPassword'));
+const ResetPassword  = lazy(() => import('./panels/auth/ResetPassword'));
 
 // ── User Panel ────────────────────────────────────────────────────────────────
-import Dashboard      from './panels/user/Dashboard';
-import Explore        from './panels/user/Explore';
-import Favorites      from './panels/user/Favorites';
-import Subscriptions  from './panels/user/Subscriptions';
-import BecomeCreator  from './panels/user/BecomeCreator';
-import UserProfile    from './panels/user/UserProfile';
-import CreatorProfile from './panels/user/CreatorProfile';
+const Dashboard      = lazy(() => import('./panels/user/Dashboard'));
+const Explore        = lazy(() => import('./panels/user/Explore'));
+const Favorites      = lazy(() => import('./panels/user/Favorites'));
+const Subscriptions  = lazy(() => import('./panels/user/Subscriptions'));
+const BecomeCreator  = lazy(() => import('./panels/user/BecomeCreator'));
+const UserProfile    = lazy(() => import('./panels/user/UserProfile'));
+const CreatorProfile = lazy(() => import('./panels/user/CreatorProfile'));
+const PostDetails    = lazy(() => import('./panels/user/PostDetails'));
 
 // ── Creator Panel ─────────────────────────────────────────────────────────────
-import CreatorStudio      from './panels/creator/CreatorStudio';
-import CreatePost         from './panels/creator/CreatePost';
-import CreatorSubscribers from './panels/creator/CreatorSubscribers';
-import CreatorSettings    from './panels/creator/CreatorSettings';
+const CreatorStudio      = lazy(() => import('./panels/creator/CreatorStudio'));
+const CreatePost         = lazy(() => import('./panels/creator/CreatePost'));
+const CreatorSubscribers = lazy(() => import('./panels/creator/CreatorSubscribers'));
+const CreatorSettings    = lazy(() => import('./panels/creator/CreatorSettings'));
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
-import AdminPanel from './panels/admin/AdminPanel';
-import AdminLogin from './panels/admin/AdminLogin';
+const AdminPanel = lazy(() => import('./panels/admin/AdminPanel'));
+const AdminLogin = lazy(() => import('./panels/admin/AdminLogin'));
 
 // ── Shared ────────────────────────────────────────────────────────────────────
-import VideoPlayer from './panels/shared/VideoPlayer';
+const VideoPlayer = lazy(() => import('./panels/shared/VideoPlayer'));
+
+const PageLoader = () => (
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)' }}>
+    <div style={{ width: 36, height: 36, border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-color, #e74c3c)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
 
 
 const getHomePathForRole = (role) => (role === 'CREATOR' ? '/creator/studio' : '/user/dashboard');
@@ -116,10 +126,13 @@ function App() {
           }
         }} 
       />
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<SessionHomeRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* USER-only dashboard: creators go to /creator/studio */}
         <Route path="/user/dashboard" element={<RoleRoute allow={['USER']} fallback="/creator/studio"><Dashboard /></RoleRoute>} />
@@ -142,6 +155,7 @@ function App() {
         {/* Public view profile */}
         <Route path="/creator-profile/:creatorId" element={<CreatorProfile />} />
         <Route path="/creator-profile" element={<Navigate to="/user/explore" replace />} />
+        <Route path="/post/:postId" element={<PostDetails />} />
         <Route path="/video/:id" element={<VideoPlayer />} />
 
         {/* Admin Routes */}
@@ -164,6 +178,7 @@ function App() {
         {/* Catch-all 404 Redirect to Home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </div>
   );
 }

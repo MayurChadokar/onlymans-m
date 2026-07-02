@@ -6,7 +6,10 @@ const adminValidator = require('../validators/admin.validator');
 
 const router = express.Router();
 
-// All admin routes require authentication + ADMIN role
+// Public admin login — no auth middleware
+router.post('/login', validate(adminValidator.login), adminController.adminLogin);
+
+// All other admin routes require authentication + ADMIN role
 router.use(authenticate, requireAdmin);
 
 // Dashboard
@@ -46,6 +49,48 @@ module.exports = router;
  * tags:
  *   name: Admin
  *   description: Admin-only platform management endpoints. Requires ADMIN role.
+ */
+
+/**
+ * @swagger
+ * /admin/login:
+ *   post:
+ *     summary: Admin login — returns JWT tokens only for ADMIN role users
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@onlymans.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: Admin@123
+ *     responses:
+ *       "200":
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                 tokens:
+ *                   type: object
+ *       "401":
+ *         description: Invalid credentials
+ *       "403":
+ *         description: Not an admin account
  */
 
 /**

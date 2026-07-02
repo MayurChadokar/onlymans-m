@@ -1,15 +1,23 @@
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
 const config = require('../config/env');
+const redisClient = require('../config/redis');
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 requests per `window` (here, per 15 minutes)
+  max: 20, // Limit each IP to 20 requests per `window`
   skipSuccessfulRequests: true,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.call(...args),
+  }),
 });
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
   max: 100,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.call(...args),
+  }),
 });
 
 const adminLimiter = rateLimit({
@@ -21,6 +29,9 @@ const adminLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.call(...args),
+  }),
 });
 
 module.exports = {

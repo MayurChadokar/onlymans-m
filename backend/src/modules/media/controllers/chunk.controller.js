@@ -14,11 +14,11 @@ const uploadChunk = async (req, res, next) => {
     const tempFilePath = path.join(tempUploadDir, `${uploadId}-merged`);
     
     // Append the chunk to the merged file
-    const chunkData = fs.readFileSync(chunkFile.path);
-    fs.appendFileSync(tempFilePath, chunkData);
+    const chunkData = await fs.promises.readFile(chunkFile.path);
+    await fs.promises.appendFile(tempFilePath, chunkData);
 
     // Delete the individual chunk file to save space
-    fs.unlinkSync(chunkFile.path);
+    await fs.promises.unlink(chunkFile.path);
 
     // If this is the last chunk, upload to Cloudinary
     console.log(`Chunk received: index ${chunkIndex}, total ${totalChunks}`);
@@ -37,7 +37,7 @@ const uploadChunk = async (req, res, next) => {
         }
 
         // Cleanup merged file
-        fs.unlinkSync(tempFilePath);
+        await fs.promises.unlink(tempFilePath);
 
         return res.status(200).json({
           url: result.secure_url,
@@ -49,7 +49,7 @@ const uploadChunk = async (req, res, next) => {
         console.error('Cloudinary chunked upload error:', uploadError.message);
         // Cleanup merged file on error
         if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
+          await fs.promises.unlink(tempFilePath);
         }
         return res.status(500).json({ message: `Failed to upload video to Cloudinary: ${uploadError.message}` });
       }

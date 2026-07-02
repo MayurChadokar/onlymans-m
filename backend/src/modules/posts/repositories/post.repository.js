@@ -14,10 +14,13 @@ const createPost = async (creatorId, content, visibility, mediaData) => {
   });
 };
 
-const getPostsByCreatorId = async (creatorId, viewerId = null) => {
+const getPostsByCreatorId = async (creatorId, viewerId = null, page = 1, limit = 50) => {
+  const skip = (page - 1) * limit;
   return prisma.post.findMany({
     where: { creatorId },
     orderBy: { createdAt: 'desc' },
+    skip,
+    take: limit,
     include: {
       media: true,
       creator: { select: { id: true, username: true } },
@@ -157,9 +160,29 @@ const getBookmarkedPostsByUserId = async (userId) => {
   });
 };
 
+const getActiveSubscriptionsByCreatorIds = async (subscriberId, creatorIds) => {
+  if (!creatorIds.length) return [];
+  return prisma.subscription.findMany({
+    where: { subscriberId, creatorId: { in: creatorIds }, status: 'ACTIVE' },
+    select: { creatorId: true },
+  });
+};
+
 const findPostById = async (postId) => {
   return prisma.post.findUnique({
     where: { id: postId }
+  });
+};
+
+const getPostDetails = async (postId, viewerId) => {
+  return prisma.post.findUnique({
+    where: { id: postId },
+    include: {
+      media: true,
+      creator: { select: { id: true, username: true } },
+      _count: { select: { likes: true, comments: true } },
+      ...(viewerId && { likes: { where: { userId: viewerId }, select: { userId: true } } })
+    }
   });
 };
 
@@ -176,6 +199,7 @@ module.exports = {
   getPostsByCreatorId,
   deletePost,
   checkSubscription,
+  getActiveSubscriptionsByCreatorIds,
   toggleLike,
   getLikesCount,
   createComment,
@@ -183,5 +207,6 @@ module.exports = {
   deleteComment,
   toggleBookmark,
   getBookmarkedPostsByUserId,
-  findPostById
+  findPostById,
+  getPostDetails
 };

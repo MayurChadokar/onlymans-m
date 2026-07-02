@@ -4,6 +4,7 @@ import './Dashboard.css';
 import Logo from '../../components/Logo';
 import { apiRequest } from '../../utils/api';
 import { clearAuthSession, getAccessToken, getCurrentUser, getRefreshToken } from '../../utils/auth';
+import UserNavbar from '../../components/UserNavbar';
 
 const Favorites = () => {
   const navigate = useNavigate();
@@ -92,47 +93,7 @@ const Favorites = () => {
 
   return (
     <div className="dashboard-layout">
-      <nav className="top-nav">
-        <div className="nav-left">
-          <Link to="/user/dashboard" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size={24} textClass="brand-logo-small" />
-          </Link>
-        </div>
-        <div className="nav-center">
-          <div className="search-bar">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" placeholder="Search creators, hashtags..." />
-          </div>
-        </div>
-        <div className="nav-right">
-          <button className="icon-btn">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
-          {user && (
-            <div className="user-avatar" style={{ position: 'relative' }}>
-              <img src={user?.avatar || 'https://i.pravatar.cc/150?img=11'} alt="Profile" onClick={() => setShowDropdown(!showDropdown)} style={{ cursor: 'pointer' }} />
-              {showDropdown && (
-                <div style={{ position: 'absolute', top: '48px', right: '0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 0', minWidth: '160px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 100 }}>
-                  <Link to="/user/profile" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}>View Profile</Link>
-                  {user?.role === 'CREATOR' && (
-                    <Link to="/creator/studio" style={{ display: 'block', padding: '10px 16px', color: 'var(--text-color)', textDecoration: 'none', fontSize: '0.9rem' }}>Creator Studio</Link>
-                  )}
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                  <button
-                    onClick={handleLogout}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                  >
-                    Log Out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
+      <UserNavbar />
 
       <div className="dashboard-content">
         <aside className="left-sidebar">
@@ -187,7 +148,7 @@ const Favorites = () => {
               <article className="post-card" key={post.id}>
                 <div className="post-header">
                   <Link to={post.creatorId ? `/view-profile/${post.creatorId}` : '/explore'} className="post-author" style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <img src={`https://i.pravatar.cc/150?u=${post.creatorUsername}`} alt={post.creatorUsername} />
+                    <img loading="lazy" decoding="async" src={`https://i.pravatar.cc/150?u=${post.creatorUsername}`} alt={post.creatorUsername} />
                     <div>
                       <h4>@{post.creatorUsername} <svg width="14" height="14" viewBox="0 0 24 24" fill="#00B4D8"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></h4>
                       <span>{post.date}</span>
@@ -206,8 +167,8 @@ const Favorites = () => {
                     {post.content}
                   </p>
                   {post.mediaUrl && (
-                    <div className="post-image-wrapper">
-                      <img src={post.mediaUrl} alt="Post Media" className="post-main-img" />
+                    <div className="post-image-wrapper" style={{ position: 'relative', width: '100%', minHeight: '300px', maxHeight: '500px', overflow: 'hidden', borderRadius: '12px', marginBottom: '16px', backgroundColor: '#000' }}>
+                      <img loading="lazy" decoding="async" src={post.mediaUrl} alt="Post Media" className="post-main-img" />
                       {post.type === 'VIDEO' && (
                         <div className="video-icon-overlay" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <svg viewBox="0 0 24 24" width="32" height="32" fill="white"><path d="M8 5v14l11-7z"/></svg>
@@ -264,7 +225,7 @@ const Favorites = () => {
                 { name: '@MountainMan', desc: 'Most active stories', img: 'https://i.pravatar.cc/150?img=59' },
               ].map((cr, i) => (
                 <div className="trending-item" key={i}>
-                  <img src={cr.img} alt={cr.name} />
+                  <img loading="lazy" decoding="async" src={cr.img} alt={cr.name} />
                   <div className="trending-info">
                     <h4>{cr.name}</h4>
                     <p>{cr.desc}</p>

@@ -84,6 +84,27 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    await authService.forgotPassword(email);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    await authService.resetPassword(token, newPassword);
+    res.status(204).send();
+  } catch (error) {
+    error.statusCode = 400;
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -91,4 +112,6 @@ module.exports = {
   logout,
   getMe,
   changePassword,
+  forgotPassword,
+  resetPassword,
 };

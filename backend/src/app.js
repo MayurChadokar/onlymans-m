@@ -9,6 +9,24 @@ const routes = require('./routes/v1');
 
 const app = express();
 
+// response time header — must set before headers are sent, so intercept res.end
+app.use((req, res, next) => {
+  const logger = require('./config/logger');
+  const start = process.hrtime.bigint();
+  const originalEnd = res.end.bind(res);
+  res.end = function (...args) {
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time', `${ms.toFixed(2)}ms`);
+    }
+    if (ms > 1000) {
+      logger.warn(`Slow: ${req.method} ${req.originalUrl} ${ms.toFixed(0)}ms`);
+    }
+    return originalEnd(...args);
+  };
+  next();
+});
+
 // set security HTTP headers
 app.use(helmet());
 

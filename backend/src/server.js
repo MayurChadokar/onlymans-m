@@ -2,11 +2,13 @@ const app = require('./app');
 const config = require('./config/env');
 const logger = require('./config/logger');
 const { connectDB, disconnectDB } = require('./config/database');
+const { firebaseService } = require('./modules/notifications');
 
 let server;
 
 const startServer = async () => {
   await connectDB();
+  firebaseService.initializeFirebase();
   
   server = app.listen(config.port, () => {
     logger.info(`Listening to port ${config.port}`);
@@ -42,3 +44,5 @@ process.on('SIGTERM', async () => {
   }
   await disconnectDB();
 });
+
+// trigger restart
