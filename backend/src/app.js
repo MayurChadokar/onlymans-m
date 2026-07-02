@@ -9,6 +9,9 @@ const routes = require('./routes/v1');
 
 const app = express();
 
+// Cloudflare → Nginx → Node = 2 hops
+app.set('trust proxy', 2);
+
 // response time header — must set before headers are sent, so intercept res.end
 app.use((req, res, next) => {
   const logger = require('./config/logger');
@@ -19,7 +22,7 @@ app.use((req, res, next) => {
     if (!res.headersSent) {
       res.setHeader('X-Response-Time', `${ms.toFixed(2)}ms`);
     }
-    if (ms > 1000) {
+    if (ms > 1000 && !req.originalUrl.includes('/media/upload')) {
       logger.warn(`Slow: ${req.method} ${req.originalUrl} ${ms.toFixed(0)}ms`);
     }
     return originalEnd(...args);
@@ -48,9 +51,8 @@ app.use(cors(corsOptions));
 app.options(/(.*)/, cors(corsOptions));
 
 // limit repeated failed requests to endpoints
-if (config.env === 'production') {
-  app.use('/api', apiLimiter);
-}
+// Apply rate limiting in all environments (not just production)
+app.use('/api', apiLimiter);
 
 // v1 api routes
 app.use('/api/v1', routes);

@@ -24,7 +24,15 @@ const updateCreatorProfile = async (userId, updateData) => {
   }
 
   const updated = await creatorRepository.updateProfile(userId, updateData);
-  await cache.delPattern(`creator:*:${userId}*`);
+  // Delete specific keys instead of slow SCAN pattern
+  await Promise.all([
+    cache.del(`creator:public:${userId}`),
+    cache.del(`creator:dashboard:${userId}`),
+    cache.del(`creator:tiers:${userId}`),
+    cache.del(`creator:comments:${userId}`),
+    cache.delPattern(`creator:secure:${userId}:*`),
+    cache.delPattern(`creator:secure:*:${userId}`),
+  ]);
   return updated;
 };
 
@@ -84,8 +92,10 @@ const getCreatorDashboard = async (creatorId) => {
       throw err;
     }
 
-    const activeSubscriptions = await creatorRepository.getCreatorSubscribers(creatorId);
-    const posts = await postRepository.getPostsByCreatorId(creatorId);
+    const [activeSubscriptions, posts] = await Promise.all([
+      creatorRepository.getCreatorSubscribers(creatorId),
+      postRepository.getPostsByCreatorId(creatorId),
+    ]);
 
     const subscribers = activeSubscriptions.map(sub => ({
       subscriptionId: sub.id,
@@ -152,10 +162,13 @@ const getSecureProfile = async (viewerId, creatorId) => {
     }
 
     const isSelf = viewerId === creatorId;
-    const sub = await creatorRepository.checkUserSubscription(viewerId, creatorId);
+    const [sub, rawPosts, subscribers, tiers] = await Promise.all([
+      creatorRepository.checkUserSubscription(viewerId, creatorId),
+      creatorRepository.getCreatorPosts(creatorId),
+      creatorRepository.getCreatorSubscribers(creatorId),
+      creatorRepository.getTiersByCreatorId(creatorId),
+    ]);
     const isSubscribed = isSelf || !!sub;
-
-    const rawPosts = await creatorRepository.getCreatorPosts(creatorId);
 
     const posts = rawPosts.map(post => {
       const isPremium = post.visibility === 'PREMIUM';
@@ -181,11 +194,8 @@ const getSecureProfile = async (viewerId, creatorId) => {
       };
     });
 
-    const subscribers = await creatorRepository.getCreatorSubscribers(creatorId);
     const totalFans = subscribers.length;
-
     const totalLikes = rawPosts.reduce((acc, post) => acc + (post._count?.likes || 0), 0);
-    const tiers = await creatorRepository.getTiersByCreatorId(creatorId);
 
     return {
       profile: {

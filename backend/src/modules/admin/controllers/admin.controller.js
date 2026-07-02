@@ -1,4 +1,5 @@
 const adminRepo = require('../repositories/admin.repository');
+const cache = require('../../../cache/cache.service');
 const {
   AdminUserDTO,
   AdminCreatorDTO,
@@ -36,7 +37,7 @@ const adminLogin = async (req, res, next) => {
 
 const getDashboard = async (req, res, next) => {
   try {
-    const stats = await adminRepo.getDashboardStats();
+    const stats = await cache.wrap('admin:dashboard', 60, () => adminRepo.getDashboardStats());
     res.json({ stats });
   } catch (error) {
     next(error);

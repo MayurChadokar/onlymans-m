@@ -15,6 +15,7 @@ const getDashboardStats = async () => {
     totalComments,
     totalPosts,
     blockedUsers,
+    revenueResult,
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'USER' } }),
     prisma.user.count({ where: { role: 'CREATOR' } }),
@@ -24,17 +25,11 @@ const getDashboardStats = async () => {
     prisma.comment.count(),
     prisma.post.count(),
     prisma.user.count({ where: { isActive: false } }),
+    prisma.subscription.findMany({
+      where: { status: 'ACTIVE' },
+      select: { creator: { select: { creatorProfile: { select: { price: true } } } } },
+    }),
   ]);
-
-  // Monthly revenue: sum only the price field, avoid loading full User/CreatorProfile rows
-  const revenueResult = await prisma.subscription.findMany({
-    where: { status: 'ACTIVE' },
-    select: {
-      creator: {
-        select: { creatorProfile: { select: { price: true } } },
-      },
-    },
-  });
 
   const monthlyRevenue = revenueResult.reduce((sum, sub) => {
     return sum + (sub.creator?.creatorProfile?.price || 0);
